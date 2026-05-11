@@ -3220,14 +3220,20 @@ function loadFromLS_fallback() {
 function applyStateData(d) {
   if(d.partenariats) partenariats = d.partenariats;
   if(d.placements) placements = d.placements;
-  if(d.deals) deals = d.deals;
+  if(d.deals) {
+    // Migrate old deals: partenaire → entreprise
+    deals = d.deals.map(deal => ({
+      ...deal,
+      entreprise: deal.entreprise || deal.partenaire || ''
+    }));
+  }
   if(d.evenements) evenements = d.evenements;
   if(d.matchs) matchs = d.matchs;
   if(d.evenementsBase) evenementsBase = d.evenementsBase;
   if(d.planifications) planifications = d.planifications;
   if(typeof d.budgetGlobal === 'number') budgetGlobal = d.budgetGlobal;
   if(d.idCtr && d.idCtr > idCtr) idCtr = d.idCtr;
-  if(d.GROUPS) GROUPS = d.GROUPS.map(g => ({...g, filter: c => c._groupId === g.id || c._gid === g.id}));
+  if(d.GROUPS) GROUPS = d.GROUPS.map(g => ({...g, filter: c => c._groupId === g.id || c._gid === g.id || c.gid === g.id}));
   if(d.publications) publications = d.publications;
   if(d.pubStatuts) pubStatuts = d.pubStatuts;
 }
