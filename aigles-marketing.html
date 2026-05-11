@@ -893,7 +893,8 @@ let evenementsBase = []; // {id, nom, date, fin, type, description}
 let calEditMode = false;
 let collapsedGroups = new Set();
 let campVue = "liste";
-let _localDirty = false; // "liste" | "gantt"
+let _localDirty = false;
+let _realtimeChannel = null; // "liste" | "gantt"
 let collapsedPlans = new Set();
 let idCtr = 100;
 let calY = 2026, calM = 3;
