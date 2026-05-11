@@ -450,10 +450,6 @@ input[type="date"].pi::-webkit-calendar-picker-indicator{opacity:0.4;cursor:poin
       <div><div style="font-weight:600">Profil</div><div style="font-size:10px;color:rgba(255,255,255,0.4)">Nom, photo, adresse courriel</div></div>
     </div>
     <div style="height:1px;background:rgba(255,255,255,0.08);margin:0 10px"></div>
-    <div onclick="forceSyncFromSupabase();closeUserMenu()" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;font-size:12px;color:rgba(255,255,255,0.85)" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background=''">
-      <div><div style="font-weight:600">Synchroniser</div><div style="font-size:10px;color:rgba(255,255,255,0.4)">Recharger depuis le serveur</div></div>
-    </div>
-    <div style="height:1px;background:rgba(255,255,255,0.08);margin:0 10px"></div>
     <div onclick="doLogout();closeUserMenu()" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;font-size:12px;color:rgba(255,255,255,0.85)" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background=''">
       <span>Déconnexion</span>
     </div>
@@ -896,7 +892,6 @@ let matchs = [
 let evenementsBase = []; // {id, nom, date, fin, type, description}
 let calEditMode = false;
 let collapsedGroups = new Set();
-let _localDirty = false; // true when user has unsaved local changes
 let campVue = "liste"; // "liste" | "gantt"
 let collapsedPlans = new Set();
 let idCtr = 100;
@@ -987,7 +982,6 @@ function updateUndoBtns() {
 const $ = id => document.getElementById(id);
 const fmtM = n => '$' + Number(n).toLocaleString('fr-CA');
 const fmtD = d => d ? new Date(d+'T12:00').toLocaleDateString('fr-CA',{month:'short',day:'numeric'}) : '—';
-const fmtDLong = d => d ? new Date(d+'T12:00').toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'}) : '—';
 function campType(c) { return c.canal || c.type; }
 function allCamps() { return [...partenariats,...placements]; }
 function findItem(id) { return partenariats.find(x=>x.id===id)||placements.find(x=>x.id===id)||null; }
@@ -1016,7 +1010,7 @@ function navTo(v) {
 }
 function handleNew() {
   if(currentView==='home' || currentView==='budget' || currentView==='gantt') return;
-  if(currentView==='publications') { addPubInlineRow(); return; }
+  if(currentView==='publications') { openAddPublication(); return; }
   if(currentView==='campagnes') { openAddGroup(); return; }
   if(currentView==='crm') { openAddDeal(); return; }
   if(currentView==='matchs') { openAddMatch(); return; }
@@ -1112,157 +1106,44 @@ function renderHomeMiniGantt() {
 // CAMPAGNES
 
 function buildGroupHtml(g, all) {
-  const items = all.filter(c => c._groupId === g.id || c._gid === g.id || c.gid === g.id || (g.filter && g.filter(c)));
-  const gtb = items.reduce((s,c)=>s+(c.budget||0),0);
-  const gtd = items.reduce((s,c)=>s+(c.depense||0),0);
-  const gact = items.filter(c=>c.statut==='actif').length;
-  const gpct = gtb ? Math.round(gtd/gtb*100) : 0;
-  const open = !collapsedGroups.has(g.id);
-  const topR = open ? 'var(--rl) var(--rl) 0 0' : 'var(--rl)';
-  const SLIST = [{id:'planifie',lbl:'Planifié',c:'#d97706'},{id:'actif',lbl:'Actif',c:'#16a34a'},{id:'pause',lbl:'En pause',c:'#6b7280'},{id:'termine',lbl:'Terminé',c:'#5b4ef8'}];
-
-  let hh = '<div class="grp-wrap">'
-    + '<div class="grp-hdr" data-gid="'+g.id+'" style="border-radius:'+topR+'">'
-      + '<span class="grp-arrow'+(open?' open':'')+'">&#9654;</span>'
-      + '<span class="grp-dot" style="background:'+g.color+'"></span>'
-      + '<span class="grp-name">'+g.label+'</span>'
-      + (gact>0 ? '<span style="font-size:9.5px;color:var(--green);background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);border-radius:10px;padding:1px 6px;flex-shrink:0">'+gact+' actif'+(gact>1?'s':'')+'</span>' : '')
-      + '<div class="grp-stats" style="margin-left:auto"><div class="grp-stats-val">'+fmtM(gtb)+'</div><div class="grp-stats-sub">'+fmtM(gtd)+' dep. ('+gpct+'%)</div></div>'
-      + '<button class="grp-del-btn" data-gid="'+g.id+'" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:18px;padding:0 8px;line-height:1;margin-left:6px">×</button>'
-    + '</div>';
-
+  const items=all.filter(g.filter||(() => false));
+  const gtb=items.reduce((s,c)=>s+c.budget,0), gtd=items.reduce((s,c)=>s+c.depense,0);
+  const gact=items.filter(c=>c.statut==='actif').length, gpct=gtb?Math.round(gtd/gtb*100):0;
+  const open=!collapsedGroups.has(g.id), topR=open?'var(--rl) var(--rl) 0 0':'var(--rl)';
+  let h='<div class="grp-wrap"><div class="grp-hdr" data-gid="'+g.id+'" style="border-radius:'+topR+'">'
+    +'<span class="grp-arrow'+(open?' open':'')+'">&#9654;</span>'
+    +'<span class="grp-dot" style="background:'+g.color+'"></span>'
+    +'<span class="grp-name">'+g.label+'</span>'
+    +(gact>0?'<span style="font-size:9.5px;color:var(--green);background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);border-radius:10px;padding:1px 6px;flex-shrink:0">'+gact+' actif'+(gact>1?'s':'')+'</span>':'')
+    +'<div class="grp-stats" style="margin-left:auto"><div class="grp-stats-val">'+fmtM(gtb)+'</div><div class="grp-stats-sub">'+fmtM(gtd)+' dep. ('+gpct+'%)</div></div>'
+    +'<button class="grp-del-btn" data-gid="'+g.id+'" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:18px;padding:0 8px;line-height:1;margin-left:6px">×</button>'+'</div>';
   if(open) {
-    hh += '<div class="grp-body"><table style="width:100%"><thead><tr>'
-      + '<th style="width:28%">Campagne</th>'
-      + '<th style="width:90px">Budget total</th>'
-      + '<th style="width:85px">Budget/jour</th>'
-      + '<th style="width:80px">Dépensé</th>'
-      + '<th style="min-width:80px">Progression</th>'
-      + '<th style="width:200px">Période</th>'
-      + '<th style="width:100px">Statut</th>'
-      + '<th style="width:40px"></th>'
-    + '</tr></thead><tbody>';
-
-    if(items.length === 0) {
-      hh += '<tr><td colspan="8" style="color:var(--t3);font-size:11px;text-align:center;padding:12px;opacity:0.5">Cliquer ci-dessous pour créer une campagne</td></tr>';
-    }
-
-    items.forEach(c => {
-      const p = c.budget ? Math.round((c.depense||0)/c.budget*100) : 0;
-      const st = SLIST.find(s=>s.id===c.statut)||SLIST[0];
-      const days = (c.debut&&c.fin) ? Math.max(1,Math.round((new Date(c.fin+'T12:00')-new Date(c.debut+'T12:00'))/86400000)+1) : 0;
-      const jourVal = (c.budget&&days) ? (c.budget/days).toFixed(2) : '';
-      const debutFmt = c.debut ? new Date(c.debut+'T12:00').toLocaleDateString('fr-CA',{day:'numeric',month:'short'}) : '—';
-      const finFmt = c.fin ? new Date(c.fin+'T12:00').toLocaleDateString('fr-CA',{day:'numeric',month:'short'}) : '—';
-
-      hh += '<tr class="camp-row" data-id="'+c.id+'">'
-        // Nom
-        + '<td><div class="camp-cell-edit" contenteditable="true" spellcheck="false" data-id="'+c.id+'" data-f="nom"'
-          + ' style="font-weight:500;padding:2px 4px;border-radius:4px;outline:none"'
-          + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';saveCampCell(this)"'
-          + ' onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}">'+c.nom+'</div></td>'
-        // Budget total
-        + '<td><div style="display:flex;align-items:center;gap:2px"><span style="font-size:10px;color:var(--t3)">$</span>'
-          + '<input type="number" class="camp-num-inp" data-id="'+c.id+'" data-f="budget" value="'+(c.budget||0)+'" min="0"'
-          + ' style="width:62px;border:none;background:transparent;font-size:12px;font-family:var(--font);color:var(--t);padding:2px 4px;border-radius:4px"'
-          + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';saveCampNum(this)"'
-          + ' oninput="campRowCalcJour(this)"></div></td>'
-        // Budget/jour
-        + '<td><div style="display:flex;align-items:center;gap:2px"><span style="font-size:10px;color:var(--t3)">$</span>'
-          + '<input type="number" class="camp-num-jour" data-id="'+c.id+'" value="'+jourVal+'" min="0" placeholder="—"'
-          + ' style="width:55px;border:none;background:transparent;font-size:12px;font-family:var(--font);color:var(--t2);padding:2px 4px;border-radius:4px"'
-          + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';campRowCalcTotal(this)"'
-          + ' oninput="campRowCalcTotal(this)"></div></td>'
-        // Dépensé
-        + '<td><div style="display:flex;align-items:center;gap:2px"><span style="font-size:10px;color:var(--t3)">$</span>'
-          + '<input type="number" class="camp-num-inp" data-id="'+c.id+'" data-f="depense" value="'+(c.depense||0)+'" min="0"'
-          + ' style="width:52px;border:none;background:transparent;font-size:12px;font-family:var(--font);color:var(--t);padding:2px 4px;border-radius:4px"'
-          + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';saveCampNum(this)"></div></td>'
-        // Progression
-        + '<td><div style="display:flex;align-items:center;gap:5px"><div class="prog"><div class="prog-f" style="width:'+p+'%;background:'+g.color+'"></div></div><span style="font-size:9.5px;color:var(--t2)">'+p+'%</span></div></td>'
-        // Période — inline dates
-        + '<td style="white-space:nowrap">'
-          + '<input type="date" class="camp-date-inp" data-id="'+c.id+'" data-f="debut" value="'+(c.debut||'')+'"'
-            + ' style="border:none;background:transparent;font-size:11px;font-family:var(--font);color:var(--t2);padding:2px 3px;border-radius:4px;width:100px;cursor:pointer"'
-            + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';saveCampDate(this)" title="Date début">'
-          + '<span style="color:var(--t3);margin:0 2px">→</span>'
-          + '<input type="date" class="camp-date-inp" data-id="'+c.id+'" data-f="fin" value="'+(c.fin||'')+'"'
-            + ' style="border:none;background:transparent;font-size:11px;font-family:var(--font);color:var(--t2);padding:2px 3px;border-radius:4px;width:100px;cursor:pointer"'
-            + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';saveCampDate(this)" title="Date fin">'
-          + (days ? '<span style="font-size:9px;color:var(--t3);margin-left:3px">'+days+'j</span>' : '')
-        + '</td>'
-        // Statut
-        + '<td><span class="camp-statut-btn" data-id="'+c.id+'" data-statut="'+c.statut+'"'
-          + ' style="cursor:pointer;font-size:10px;font-weight:600;padding:3px 9px;border-radius:20px;background:'+st.c+'18;color:'+st.c+';border:1px solid '+st.c+'40;white-space:nowrap">'+st.lbl+'</span></td>'
-        // Supprimer
-        + '<td style="text-align:right;padding-right:8px"><button class="camp-del-btn" data-id="'+c.id+'"'
-          + ' style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:16px;padding:2px 4px;opacity:0.3;line-height:1"'
-          + ' onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.3\'">×</button></td>'
-      + '</tr>';
-    });
-
-    hh += '<tr class="new-camp-row" data-gid="'+g.id+'">'
-      + '<td colspan="8" style="padding:8px 12px">'
-        + '<div style="display:flex;align-items:center;gap:7px;color:var(--t3);font-size:11.5px;cursor:pointer">'
-          + '<span style="width:16px;height:16px;border-radius:50%;border:1px dashed var(--t3);display:inline-flex;align-items:center;justify-content:center;font-size:13px">+</span>'
-          + 'Créer une nouvelle campagne'
-        + '</div>'
-      + '</td>'
-    + '</tr>';
-
-    hh += '</tbody></table></div>';
+    h+='<div class="grp-body"><table><thead><tr><th>Campagne</th><th>Budget</th><th>Dépensé</th><th>Progression</th><th>Période</th><th>Statut</th><th></th></tr></thead><tbody>'
+      +(items.length===0?'<tr><td colspan="7" style="color:var(--t3);font-size:11.5px;text-align:center;padding:14px;font-style:italic">Aucune campagne</td></tr>':'')
+      +items.map(c=>{const p=c.budget?Math.round(c.depense/c.budget*100):0;
+        return '<tr data-id="'+c.id+'"><td><div style="font-weight:500">'+c.nom+'</div><div style="font-size:9.5px;color:var(--t3)">'+(c.marche||'')+'</div></td>'
+          +'<td>'+fmtM(c.budget)+'</td><td>'+fmtM(c.depense)+'</td>'
+          +'<td><div style="display:flex;align-items:center;gap:5px"><div class="prog"><div class="prog-f" style="background:'+g.color+'"></div></div><span style="font-size:9.5px;color:var(--t2)">'+p+'%</span></div></td>'
+          +'<td style="font-size:10.5px;color:var(--t2)">'+fmtD(c.debut)+' → '+fmtD(c.fin)+'</td>'
+          +'<td>'+badge(c.statut)+'</td>'
+          +'<td style="white-space:nowrap">'
+          +'<button class="btn btn-sm edit-btn" data-id="'+c.id+'">Modifier</button>'
+          +'<button class="btn btn-ghost btn-sm dup-btn" data-id="'+c.id+'" title="Dupliquer" style="margin-left:3px">Dupliquer</button>'
+          +'</td></tr>';}).join('')
+      +'<tr class="new-camp-row" data-gid="'+g.id+'"><td colspan="7"><div style="display:flex;align-items:center;gap:7px;color:var(--t3);font-size:11.5px">'
+        +'<span style="width:16px;height:16px;border-radius:50%;border:1px dashed var(--t3);display:inline-flex;align-items:center;justify-content:center;font-size:12px;line-height:1">+</span>'
+        +'Créer une nouvelle campagne</div></td></tr>'
+      +'</tbody></table></div>';
   }
-  return hh + '</div>';
+  return h+'</div>';
 }
-
-function campRowDays(id) {
-  const c = allCamps().find(x=>x.id===id); if(!c||!c.debut||!c.fin) return 0;
-  return Math.max(1, Math.round((new Date(c.fin+'T12:00') - new Date(c.debut+'T12:00')) / 86400000) + 1);
-}
-function campRowCalcJour(budgetInp) {
-  const days = campRowDays(budgetInp.dataset.id);
-  const jourInp = budgetInp.closest('tr')?.querySelector('.camp-num-jour');
-  if(jourInp && days > 0) jourInp.value = (parseFloat(budgetInp.value)||0) / days > 0 ? ((parseFloat(budgetInp.value)||0) / days).toFixed(2) : '';
-}
-function campRowCalcTotal(jourInp) {
-  const row = jourInp.closest('tr'); if(!row) return;
-  const id = jourInp.dataset.id; if(!id) return;
-  const days = campRowDays(id);
-  if(days > 0) {
-    const total = Math.round((parseFloat(jourInp.value)||0) * days * 100)/100;
-    const budInp = row.querySelector('.camp-num-inp[data-f="budget"]');
-    if(budInp) { budInp.value = total; saveCampNum(budInp); }
-  }
-}
-
-function saveCampDate(inp) {
-  const c = allCamps().find(x=>x.id===inp.dataset.id); if(!c) return;
-  c[inp.dataset.f] = inp.value;
-  // Recalc budget/jour in same row
-  const row = inp.closest('tr'); if(!row) return;
-  const days = campRowDays(inp.dataset.id);
-  const budInp = row.querySelector('.camp-num-inp[data-f="budget"]');
-  const jourInp = row.querySelector('.camp-num-jour');
-  if(jourInp && days > 0 && budInp) jourInp.value = ((parseFloat(budInp.value)||0)/days).toFixed(2);
-  saveState();
-}
-
-function saveCampCell(el) {
-  const c = allCamps().find(x=>x.id===el.dataset.id); if(!c) return;
-  const val = el.textContent.trim(); if(c[el.dataset.f] === val) return;
-  snapshot(); c[el.dataset.f] = val; saveState();
-}
-function saveCampNum(inp) {
-  const c = allCamps().find(x=>x.id===inp.dataset.id); if(!c) return;
-  const val = parseFloat(inp.value)||0; if(c[inp.dataset.f] === val) return;
-  snapshot(); c[inp.dataset.f] = val; saveState(); renderCampagnes();
-}
-
 
 function renderCampagnes() {
   const all=allCamps();
   const tb=all.reduce((s,c)=>s+c.budget,0), td=all.reduce((s,c)=>s+c.depense,0);
   const act=all.filter(c=>c.statut==='actif').length, pct=tb?Math.round(td/tb*100):0;
+
+  // ── View toggle ──
   let html='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">'
     +'<div style="display:flex;gap:2px;background:var(--bgh);border:1px solid var(--b);border-radius:var(--r);padding:2px">'
       +'<button class="btn btn-sm'+(campVue==='liste'?' btn-w':' btn-ghost')+'" onclick="campVue=\'liste\';renderCampagnes()" style="padding:4px 12px">Liste</button>'
@@ -1340,33 +1221,8 @@ function renderCampagnes() {
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.grp-hdr').forEach(hdr=>{
     hdr.addEventListener('click',()=>{const gid=hdr.dataset.gid;collapsedGroups.has(gid)?collapsedGroups.delete(gid):collapsedGroups.add(gid);renderCampagnes();});
   });
-  // Statut cycle on click
-  const STATUTS_CYCLE = ['planifie','actif','pause','termine'];
-  const STATUTS_INFO = {planifie:{lbl:'Planifié',color:'#d97706'},actif:{lbl:'Actif',color:'#16a34a'},pause:{lbl:'En pause',color:'#6b7280'},termine:{lbl:'Terminé',color:'#5b4ef8'}};
-  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.camp-statut-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const c = allCamps().find(x=>x.id===btn.dataset.id); if(!c) return;
-      const idx = STATUTS_CYCLE.indexOf(c.statut);
-      const next = STATUTS_CYCLE[(idx+1) % STATUTS_CYCLE.length];
-      snapshot(); c.statut = next; saveState();
-      const info = STATUTS_INFO[next];
-      btn.dataset.statut = next; btn.textContent = info.lbl;
-      btn.style.background = info.color+'18'; btn.style.color = info.color; btn.style.borderColor = info.color+'40';
-    });
-  });
-  // Dates cell → open edit modal
-  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.camp-dates-cell').forEach(cell => {
-    cell.addEventListener('click', e => { e.stopPropagation(); openEditModal(cell.dataset.id); });
-  });
-  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.dup-btn').forEach(btn=>btn.addEventListener('click',e=>{
-    e.stopPropagation();
-    const src=allCamps().find(x=>x.id===btn.dataset.id); if(!src) return;
-    snapshot();
-    const copy=JSON.parse(JSON.stringify(src));
-    copy.id='pl'+(++idCtr); copy.nom=src.nom+' (copie)'; copy.depense=0;
-    placements.push(copy); saveState(); renderCampagnes(); toast('Campagne dupliquée');
-  }));
+  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('tbody tr[data-id]').forEach(r=>r.addEventListener('click',()=>openEditModal(r.dataset.id)));
+  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.edit-btn').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();openEditModal(btn.dataset.id);}));
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.dup-btn').forEach(btn=>btn.addEventListener('click',e=>{
     e.stopPropagation();
     const src = allCamps().find(x=>x.id===btn.dataset.id); if(!src) return;
@@ -1384,41 +1240,47 @@ function renderCampagnes() {
     row.addEventListener('mouseleave',()=>row.style.opacity='0.4');
     row.addEventListener('click', () => {
       const gid = row.dataset.gid;
-      const newC = {id:'pl'+(++idCtr), nom:'Nouvelle campagne', _groupId: gid,
-        budget:0, depense:0, debut:'', fin:'', statut:'planifie',
-        canal:'custom', impressions:0, clics:0, segments:[], persona:[], notes:'',
-        periodes:[{id:Date.now(), debut:'', fin:'', budget:0}]};
-      placements.push(newC);
-      scheduleSave(); renderCampagnes();
-      // Focus name field of new row
-      setTimeout(() => {
-        const cells = document.querySelectorAll('.camp-cell-edit');
-        if(cells.length) cells[cells.length-1].focus();
-      }, 30);
-    });
-  });
-  // Statut cycle
-  const SLIST2 = ['planifie','actif','pause','termine'];
-  const SINFO2 = {planifie:{lbl:'Planifié',c:'#d97706'},actif:{lbl:'Actif',c:'#16a34a'},pause:{lbl:'En pause',c:'#6b7280'},termine:{lbl:'Terminé',c:'#5b4ef8'}};
-  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.camp-statut-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const c = allCamps().find(x=>x.id===btn.dataset.id); if(!c) return;
-      const next = SLIST2[(SLIST2.indexOf(c.statut)+1) % SLIST2.length];
-      snapshot(); c.statut = next; saveState();
-      const info = SINFO2[next];
-      btn.dataset.statut = next; btn.textContent = info.lbl;
-      btn.style.background = info.c+'18'; btn.style.color = info.c; btn.style.borderColor = info.c+'40';
-    });
-  });
-  // Delete campaign
-  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.camp-del-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const id = btn.dataset.id;
-      partenariats = partenariats.filter(x=>x.id!==id);
-      placements = placements.filter(x=>x.id!==id);
-      scheduleSave(); renderCampagnes(); toast('Campagne supprimée');
+      // Insert inline editable row
+      const tbody = row.closest('tbody');
+      if(tbody.querySelector('.inline-camp-row')) return; // already open
+      const tr = document.createElement('tr');
+      tr.className = 'inline-camp-row';
+      tr.innerHTML = '<td><input class="crm-inline-input icr-nom" placeholder="Nom de la campagne" style="width:100%;font-weight:500"></td>'
+        +'<td><input type="number" class="crm-inline-input icr-budget" placeholder="0" min="0" style="width:80px;text-align:right"></td>'
+        +'<td style="color:var(--t3);font-size:11px">$0</td>'
+        +'<td></td>'
+        +'<td style="display:flex;gap:4px;align-items:center">'
+          +'<input type="date" class="crm-inline-input fi icr-debut" style="font-size:11px;padding:3px 5px;width:130px">'
+          +'<span style="color:var(--t3)">→</span>'
+          +'<input type="date" class="crm-inline-input fi icr-fin" style="font-size:11px;padding:3px 5px;width:130px">'
+        +'</td>'
+        +'<td><select class="crm-inline-select icr-statut"><option value="planifie">Planifié</option><option value="actif">Actif</option></select></td>'
+        +'<td style="white-space:nowrap">'
+          +'<button class="btn btn-w btn-sm icr-save" style="padding:2px 8px;font-size:10px">Ajouter</button>'
+          +'<button class="btn btn-ghost btn-sm icr-cancel" style="padding:2px 8px;font-size:10px;margin-left:3px">×</button>'
+        +'</td>';
+      tbody.insertBefore(tr, row);
+      const nomInp = tr.querySelector('.icr-nom');
+      nomInp.focus();
+      styleDateInputs(tr);
+      tr.querySelector('.icr-cancel').addEventListener('click', () => tr.remove());
+      tr.querySelector('.icr-save').addEventListener('click', () => {
+        const nom = tr.querySelector('.icr-nom').value.trim();
+        if(!nom) { tr.querySelector('.icr-nom').focus(); return; }
+        snapshot();
+        const g2 = GROUPS.find(x=>x.id===gid); if(!g2) return;
+        const newC = {id:'pl'+(++idCtr), nom, _groupId: gid,
+          budget:parseFloat(tr.querySelector('.icr-budget').value)||0,
+          depense:0,
+          debut:tr.querySelector('.icr-debut').value,
+          fin:tr.querySelector('.icr-fin').value,
+          statut:tr.querySelector('.icr-statut').value,
+          canal:'custom', impressions:0, clics:0,
+          segments:[], persona:[], notes:'', periodes:[]};
+        placements.push(newC);
+        saveState(); renderCampagnes(); toast('Campagne ajoutée');
+      });
+      nomInp.addEventListener('keydown', e => { if(e.key==='Enter') tr.querySelector('.icr-save').click(); if(e.key==='Escape') tr.remove(); });
     });
   });
   // Delete group
@@ -1433,6 +1295,7 @@ function renderCampagnes() {
         ? 'Supprimer "'+g.label+'" et ses '+items.length+' campagne(s) ?'
         : 'Supprimer le groupe "'+g.label+'" ?';
       if(!confirm(msg)) return;
+      snapshot();
       GROUPS = GROUPS.filter(x => x.id !== gid);
       partenariats = partenariats.filter(c => c._groupId !== gid);
       placements = placements.filter(c => c._groupId !== gid);
@@ -1651,16 +1514,6 @@ function renderCal() {
     }
   });
 
-  // Add publications to calendar
-  publications.forEach(function(p) {
-    if(p.datePubl) {
-      const d = new Date(p.datePubl+'T12:00');
-      if(d.getMonth()===calM && d.getFullYear()===calY) {
-        add(p.datePubl, {kind:'pub', id:p.id, label:p.titre, statut:p.statut});
-      }
-    }
-  });
-
   let html=JOURS.map(j=>'<div class="cdlbl">'+j+'</div>').join('');
   for(let i=0;i<firstDay;i++)html+='<div class="cdc other"></div>';
   for(let d=1;d<=days;d++){
@@ -1693,10 +1546,6 @@ function renderCal() {
         }else{
           html+='<div style="'+style+'">'+item.label+'</div>';
         }
-      } else if(item.kind==='pub'){
-        const PUB_COLS = {attente:'#d97706',approuve:'#16a34a',rejete:'#dc2626',revision:'#2563eb'};
-        const pc = PUB_COLS[item.statut]||'#888';
-        html+='<div style="font-size:9.5px;font-weight:600;padding:2px 6px;border-radius:4px;margin-bottom:2px;display:block;background:'+pc+'18;color:'+pc+';border-left:2px solid '+pc+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+item.label+'">'+item.label+'</div>';
       }
     });
     html+='</div>';
@@ -1902,8 +1751,7 @@ function renderCRM(){
   // Delete deal
   el.querySelectorAll('.crm-del-deal').forEach(btn => {
     btn.addEventListener('click', () => {
-      deals = deals.filter(x=>x.id!==btn.dataset.did);
-      scheduleSave();
+      snapshot(); deals = deals.filter(x=>x.id!==btn.dataset.did);
       renderCRM(); toast('Entente supprimée');
     });
   });
@@ -2041,6 +1889,7 @@ function createGroupInline() {
   const nom = document.getElementById('new-grp-name')?.value.trim();
   const color = document.getElementById('new-grp-color')?.value || '#5b4ef8';
   if(!nom) { document.getElementById('new-grp-name')?.focus(); return; }
+  snapshot();
   const gid = 'g'+(++idCtr);
   GROUPS.push({ id: gid, label: nom, color, filter: c => c.gid === gid });
   saveState(); renderCampagnes(); toast('Groupe créé');
@@ -3264,26 +3113,7 @@ function getSB() {
   return _sb;
 }
 
-// Direct fetch helper that bypasses Supabase JS client headers issues
-async function sbFetch(path, options = {}) {
-  const sb = getSB();
-  let token = SB_KEY;
-  if(sb) {
-    const { data } = await sb.auth.getSession();
-    if(data?.session?.access_token) token = data.session.access_token;
-  }
-  const res = await fetch(SB_URL + path, {
-    ...options,
-    headers: {
-      'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + token,
-      'Content-Type': 'application/json',
-      'Prefer': options.prefer || '',
-      ...(options.headers || {})
-    }
-  });
-  return res;
-}
+let _saveTimer = null;
 let _syncStatus = 'idle';
 
 function setSyncStatus(s) {
@@ -3296,11 +3126,35 @@ function setSyncStatus(s) {
     saved:   {text:'Sauvegardé', color:'var(--green)'},
     error:   {text:'Erreur sync', color:'var(--amber)'},
     loading: {text:'Chargement...', color:'var(--t2)'},
-    syncing: {text:'Sync...', color:'var(--t3)'},
   };
   const c = cfg[s] || cfg.idle;
   ind.textContent = c.text;
   ind.style.color = c.color;
+}
+
+
+// Direct fetch helper — bypasses Supabase JS client extra headers that cause 520
+async function sbFetch(path, options) {
+  options = options || {};
+  const sb = getSB();
+  let token = SB_KEY;
+  try {
+    if(sb) {
+      const { data } = await sb.auth.getSession();
+      if(data && data.session && data.session.access_token) token = data.session.access_token;
+    }
+  } catch(e) {}
+  const res = await fetch(SB_URL + path, {
+    method: options.method || 'GET',
+    headers: Object.assign({
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + token,
+      'Content-Type': 'application/json',
+      'Prefer': options.prefer || ''
+    }, options.headers || {}),
+    body: options.body || undefined
+  });
+  return res;
 }
 
 async function saveToDB() {
@@ -3309,6 +3163,7 @@ async function saveToDB() {
     setSyncStatus('saving');
     const res = await sbFetch('/rest/v1/app_state', {
       method: 'POST',
+      prefer: 'resolution=merge-duplicates',
       headers: { 'Prefer': 'resolution=merge-duplicates' },
       body: JSON.stringify({ key: 'main', data: buildStateData() })
     });
@@ -3325,11 +3180,9 @@ async function saveToDB() {
 }
 
 async function loadFromDB() {
-  // Show localStorage immediately
   const hadLocal = loadFromLS_fallback();
   if(hadLocal) { render(currentView); setSyncStatus('syncing'); }
   else { setSyncStatus('loading'); }
-
   try {
     const res = await sbFetch('/rest/v1/app_state?select=data&key=eq.main');
     if(!res.ok) { setSyncStatus('idle'); return hadLocal; }
@@ -3340,9 +3193,7 @@ async function loadFromDB() {
       render(currentView);
       setSyncStatus('saved');
       setTimeout(() => setSyncStatus('idle'), 2000);
-    } else {
-      setSyncStatus('idle');
-    }
+    } else { setSyncStatus('idle'); }
     return true;
   } catch(e) {
     console.warn('Load failed:', e.message);
@@ -3351,29 +3202,1494 @@ async function loadFromDB() {
   }
 }
 
-async function forceSyncFromSupabase() {
-  setSyncStatus('loading');
+function saveToLS_fallback(state) {
   try {
-    const res = await sbFetch('/rest/v1/app_state?select=data&key=eq.main');
-    if(!res.ok) { toast('Erreur HTTP ' + res.status); setSyncStatus('error'); return; }
-    const rows = await res.json();
-    if(rows && rows[0] && rows[0].data) {
-      _localDirty = false;
-      applyStateData(rows[0].data);
-      saveToLS_fallback(rows[0].data);
-      render(currentView);
-      setSyncStatus('saved');
-      setTimeout(() => setSyncStatus('idle'), 2000);
-      toast('Données synchronisées');
-    } else {
-      toast('Aucune donnée');
-      setSyncStatus('idle');
+    console.log('QG: Saving to localStorage (backup)...');
+    const s = state || {
+      partenariats, placements, deals, evenements,
+      matchs, evenementsBase,
+      GROUPS: GROUPS.map(g => { const {filter,...r} = g; return r; }),
+      planifications, budgetGlobal, idCtr, publications, pubStatuts,
+    };
+    localStorage.setItem('qg_marketing_v1', JSON.stringify(s));
+  } catch(e) {}
+}
+
+function loadFromLS_fallback() {
+  try {
+    const raw = localStorage.getItem('qg_marketing_v1') || localStorage.getItem('aigles_marketing_v1');
+    if(!raw) { console.log('QG: No localStorage data found'); return false; }
+    applyStateData(JSON.parse(raw));
+    console.log('QG: Loaded from localStorage');
+    return true;
+  } catch(e) { console.warn('QG: localStorage load error:', e); return false; }
+}
+
+function applyStateData(d) {
+  if(d.partenariats) partenariats = d.partenariats;
+  if(d.placements) placements = d.placements;
+  if(d.deals) deals = d.deals;
+  if(d.evenements) evenements = d.evenements;
+  if(d.matchs) matchs = d.matchs;
+  if(d.evenementsBase) evenementsBase = d.evenementsBase;
+  if(d.planifications) planifications = d.planifications;
+  if(typeof d.budgetGlobal === 'number') budgetGlobal = d.budgetGlobal;
+  if(d.idCtr && d.idCtr > idCtr) idCtr = d.idCtr;
+  if(d.GROUPS) GROUPS = d.GROUPS.map(g => ({...g, filter: c => c._groupId === g.id || c._gid === g.id}));
+  if(d.publications) publications = d.publications;
+  if(d.pubStatuts) pubStatuts = d.pubStatuts;
+}
+
+function scheduleSave() {
+  if(_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(saveToDB, 800);
+}
+
+function saveToLS() { scheduleSave(); }
+
+function clearAllData() {
+  if(!confirm('Effacer toutes les données ? Cette action est irréversible.')) return;
+  localStorage.removeItem('qg_marketing_v1');
+  localStorage.removeItem('aigles_marketing_v1');
+  const sb = getSB();
+  if(sb) sb.from('app_state').delete().eq('key','main').then(() => location.reload());
+  else location.reload();
+}
+
+
+
+function openAddCamp(gid){
+  _gid=gid||'';
+  campProp=null;
+  _periodes=[{id:newPeriodeId(),debut:'',fin:'',budget:0}];
+  _selPersona='aigles';
+  const g=GROUPS.find(x=>x.id===gid);
+  const badge2=g?'<div style="display:flex;align-items:center;gap:7px;padding:6px 10px;background:var(--bgh);border-radius:var(--r);border:1px solid var(--b);margin-bottom:12px"><span style="width:7px;height:7px;border-radius:2px;background:'+g.color+';flex-shrink:0"></span><span style="font-size:11.5px;color:var(--t2)">Groupe : <strong style="color:var(--t)">'+g.label+'</strong></span></div>':'';
+
+  showModal(
+    '<div class="mhdr"><div class="mtitle">Nouvelle campagne</div><button class="mclose" onclick="closeModal()">×</button></div>'
+    +badge2
+    +'<div id="camp-form">'
+      +'<div class="fg"><label class="fl">Nom de la campagne</label><input class="fi" id="f-nom" placeholder="Ex: Match ce soir" autofocus></div>'
+      +'<div class="fg2">'
+        +'<div class="fg"><label class="fl">Budget global ($)</label><input type="number" class="fi" id="f-bud" placeholder="0" min="0" oninput="campBudgetFromTotal()"></div>'
+        +'<div class="fg"><label class="fl">Budget / jour ($)</label><input type="number" class="fi" id="f-bud-jour" placeholder="auto" min="0" oninput="campBudgetFromJour()"></div>'
+        +'<div class="fg"><label class="fl">Statut</label><select class="fs" id="f-st"><option value="planifie">Planifié</option><option value="actif">Actif</option><option value="termine">Terminé</option></select></div>'
+      +'</div>'
+      +'<div class="fg"><label class="fl">Persona cible</label><div class="pgrid" id="pgrid">'+PERSONAS.map(p=>'<button class="pbtn'+(p.id==='aigles'?' sel':'')+'" data-pid="'+p.id+'"><span class="pbtn-icon">'+p.icon+'</span><span class="pbtn-lbl">'+p.lbl+'</span></button>').join('')+'</div></div>'
+      +'<div class="fg"><label class="fl">Message</label><textarea class="fta" id="f-desc" placeholder="Message de la campagne..." style="min-height:50px"></textarea></div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">'
+        +'<label class="fl" style="margin:0">Plages de diffusion</label>'
+        +'<span style="font-size:9.5px;color:var(--t3)">Même campagne, plusieurs fenêtres de dates</span>'
+      +'</div>'
+      +'<div id="plist"></div>'
+      +'<button id="btn-addper" style="width:100%;padding:8px;border:1px dashed rgba(0,0,0,0.2);background:transparent;border-radius:var(--r);cursor:pointer;color:var(--t3);font-size:11px;font-family:var(--font);margin-bottom:6px;transition:all 0.1s">+ Ajouter une plage de dates</button>'
+      +'<div style="background:var(--bgh);border:1px solid var(--b);border-radius:var(--r);padding:9px;margin-bottom:9px">'
+        +'<div style="font-size:9.5px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Générer des plages avec l\'IA</div>'
+        +'<div style="display:flex;gap:7px">'
+          +'<input class="fi" id="ia-prompt" placeholder="Ex: Crée une plage pour chaque série à domicile en juin" style="flex:1;font-size:12px">'
+          +'<button class="btn btn-sm btn-w" id="btn-gen-ia" onclick="genCampIA()" style="white-space:nowrap;gap:6px"><span id="ia-spin2" class="spin"></span>Générer</button>'
+        +'</div>'
+        +(matchs.length?'<div style="font-size:10px;color:var(--t3);margin-top:5px">'+matchs.filter(m=>m.domicile).length+' matchs domicile dans ton calendrier</div>':'')
+        +'<div id="ia-gen-status" style="font-size:11px;color:var(--t2);margin-top:4px"></div>'
+      +'</div>'
+      +'<div class="fg"><label class="fl">Lien UTM</label><div class="utm-box" id="utm-prev" title="Cliquer pour copier">—</div></div>'
+    +'</div>'
+    +'<div class="mact">'
+      +'<button class="btn" onclick="closeModal()">Annuler</button>'
+      +'<button class="btn btn-w" id="btn-sc">Ajouter la campagne</button>'
+    +'</div>'
+  );
+  setTimeout(()=>{
+    $('btn-sc').onclick=()=>saveCampManuel();
+    $('btn-addper').addEventListener('click',addPeriode);
+    $('utm-prev').addEventListener('click',()=>navigator.clipboard.writeText($('utm-prev').textContent).then(()=>toast('UTM copié !')));
+    ($('pgrid')||{querySelectorAll:()=>[]}).querySelectorAll('.pbtn').forEach(btn=>btn.addEventListener('click',()=>{
+      ($('pgrid')||{querySelectorAll:()=>[]}).querySelectorAll('.pbtn').forEach(b=>b.classList.remove('sel'));
+      btn.classList.add('sel'); _selPersona=btn.dataset.pid; refreshUTMPreview();
+    }));
+    $('f-nom').addEventListener('input',refreshUTMPreview);
+    renderPeriodes2(); refreshUTMPreview();
+  },0);
+}
+
+function switchTab(t){
+  const isIA=t==='ia';
+  $('ia-prompt-area').style.display=isIA?'block':'none';
+  $('tab-man').classList.toggle('on',!isIA);
+  $('tab-ia').classList.toggle('on',isIA);
+}
+
+// Fill form from AI response
+function fillFormFromAI(p){
+  if($('f-nom')&&p.nom) $('f-nom').value=p.nom;
+  if($('f-bud')&&p.budget_total) $('f-bud').value=p.budget_total;
+  if($('f-desc')&&p.message) $('f-desc').value=p.message;
+  if($('f-st')&&p.statut) $('f-st').value=p.statut||'planifie';
+  // Persona
+  if(p.persona){
+    _selPersona=p.persona;
+    if($('pgrid')){
+      ($('pgrid')||{querySelectorAll:()=>[]}).querySelectorAll('.pbtn').forEach(b=>b.classList.remove('sel'));
+      const btn=$('pgrid').querySelector('[data-pid="'+p.persona+'"]');
+      if(btn)btn.classList.add('sel');
     }
-  } catch(e) {
-    console.error('Sync error:', e);
-    setSyncStatus('error');
-    toast('Erreur: ' + e.message);
+  }
+  // Periodes
+  if(p.periodes&&p.periodes.length){
+    _periodes=p.periodes.map((per,i)=>({id:newPeriodeId(),debut:per.debut||'',fin:per.fin||'',budget:per.budget||0}));
+    renderPeriodes2();
+  }
+  refreshUTMPreview();
+  // Show refine area
+  const ra=$('refine-area');if(ra)ra.style.display='block';
+  const gs=$('ia-gen-status');if(gs){gs.textContent=(_periodes.length)+' plage(s) générée(s)';gs.style.color='var(--green)';}
+}
+
+async function genCampIA(){
+  const prompt=($('ia-prompt')&&$('ia-prompt').value.trim())||'';
+  if(!prompt){toast('Décris les plages souhaitées');return;}
+  const spin=$('ia-spin2'),btn=$('btn-gen-ia'),gs=$('ia-gen-status');
+  if(spin)spin.classList.add('v');
+  if(btn)btn.disabled=true;
+  if(gs)gs.textContent='Génération en cours...';
+
+  const homeMatchs=matchs.filter(m=>m.domicile).map(m=>({date:m.date,adv:m.adversaire}));
+  const sys=`Tu es un assistant marketing pour une équipe de baseball (Aigles de Trois-Rivières, saison 2026).
+Tu dois générer des plages de dates de diffusion publicitaire basées sur le calendrier des matchs fourni.
+Réponds UNIQUEMENT avec un JSON valide, sans texte avant ou après, sans balises markdown.
+Format: {"plages":[{"debut":"YYYY-MM-DD","fin":"YYYY-MM-DD","note":"courte description"}]}
+Génère entre 1 et 10 plages. Les dates doivent être en 2026.`;
+
+  const userMsg=`Matchs à domicile disponibles: ${JSON.stringify(homeMatchs.slice(0,60))}
+
+Demande: ${prompt}
+
+Génère les plages de dates uniquement.`;
+
+  try{
+    const sb2=getSB();const respRaw=await sb2.functions.invoke('anthropic-proxy',{body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:[{role:'user',content:userMsg}]})});if(respRaw.error)throw new Error(respRaw.error.message);const resp={ok:true,json:()=>Promise.resolve(respRaw.data)}
+    // error handled above
+    const data=await resp.json();
+    const raw=data.content[0].text.replace(/```json|```/g,'').trim();
+    const result=JSON.parse(raw);
+    if(!result.plages||!result.plages.length) throw new Error('Aucune plage générée');
+
+    // Apply to _periodes
+    snapshot();
+    _periodes=result.plages.map((p,i)=>({id:newPeriodeId(),debut:p.debut,fin:p.fin,budget:0}));
+    renderPeriodes2();
+
+    if(gs)gs.textContent=result.plages.length+' plage(s) générée(s) ';
+    toast(result.plages.length+' plages générées');
+  }catch(e){
+    const msg = e.message === 'Failed to fetch' 
+      ? 'Erreur réseau — vérifie ta connexion ou les paramètres CORS' 
+      : e.message;
+    if(gs){gs.textContent='Erreur: '+msg;gs.style.color='var(--amber)';}
+    toast('Erreur IA: '+msg);
+    console.error('AI error:', e);
+  }finally{
+    if(spin)spin.classList.remove('v');
+    if(btn)btn.disabled=false;
   }
 }
 
->
+
+function showLoginScreen() {
+  const ls = document.getElementById('login-screen');
+  const app = document.querySelector('.sidebar');
+  const main = document.querySelector('.main');
+  const ub = document.getElementById('user-bar');
+  if(ls) ls.style.display = 'flex';
+  if(app) app.style.display = 'none';
+  if(main) main.style.display = 'none';
+  if(ub) ub.style.display = 'none';
+}
+
+function showApp(user) {
+  currentUser = user;
+  loadProfiles();
+  const ls = document.getElementById('login-screen');
+  const app = document.querySelector('.sidebar');
+  const main = document.querySelector('.main');
+  const ub = document.getElementById('user-bar');
+  if(ls) ls.style.display = 'none';
+  if(app) app.style.display = '';
+  if(main) main.style.display = '';
+  // Show user bar
+  if(ub) ub.style.display = 'block';
+  updateUserBar();
+}
+
+function updateUserBar() {
+  const user = currentUser; if(!user) return;
+  const name = user.user_metadata?.nom || user.email.split('@')[0];
+  const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  const nameEl = document.getElementById('user-name');
+  const emailEl = document.getElementById('user-email-lbl');
+  const avatarEl = document.getElementById('user-avatar');
+  if(nameEl) nameEl.textContent = name;
+  if(emailEl) emailEl.textContent = user.email;
+  if(avatarEl) {
+    const photo = user.user_metadata?.photo;
+    if(photo) avatarEl.innerHTML = '<img src="'+photo+'" style="width:100%;height:100%;object-fit:cover">';
+    else avatarEl.textContent = initials;
+  }
+}
+
+function showSignup() {
+  const extra = document.getElementById('signup-extra');
+  const toggle = document.getElementById('toggle-signup');
+  if(extra) extra.style.display = extra.style.display === 'none' ? 'block' : 'none';
+  if(toggle) toggle.textContent = extra.style.display === 'none' ? 'Pas encore de compte ? Créer un compte' : 'Déjà un compte ? Se connecter';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email')?.value?.trim();
+  const pwd = document.getElementById('login-pwd')?.value;
+  const err = document.getElementById('login-error');
+  const spin = document.getElementById('login-spin');
+  const btn = document.getElementById('login-btn');
+  if(!email || !pwd) { showLoginError('Remplis tous les champs'); return; }
+  if(spin) spin.classList.add('v');
+  if(btn) btn.disabled = true;
+  const sb = getSB();
+  if(!sb) { showLoginError('Erreur de connexion'); return; }
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
+  if(spin) spin.classList.remove('v');
+  if(btn) btn.disabled = false;
+  if(error) { showLoginError(error.message === 'Invalid login credentials' ? 'Courriel ou mot de passe incorrect' : error.message); return; }
+  showApp(data.user);
+  loadFromDB().then(() => render(currentView));
+}
+
+async function doSignup() {
+  const email = document.getElementById('login-email')?.value?.trim();
+  const pwd = document.getElementById('login-pwd')?.value;
+  const nom = document.getElementById('signup-nom')?.value?.trim();
+  const spin = document.getElementById('signup-spin');
+  if(!email || !pwd || !nom) { showLoginError('Remplis tous les champs'); return; }
+  if(pwd.length < 6) { showLoginError('Mot de passe : minimum 6 caractères'); return; }
+  if(spin) spin.classList.add('v');
+  const sb = getSB();
+  const { data, error } = await sb.auth.signUp({
+    email, password: pwd,
+    options: { data: { nom } }
+  });
+  if(spin) spin.classList.remove('v');
+  if(error) { showLoginError(error.message); return; }
+  if(data.user) {
+    // Insert profile
+    await sb.from('profiles').upsert({ id: data.user.id, email, nom });
+    showApp(data.user);
+    loadFromDB().then(() => render(currentView));
+  } else {
+    showLoginError('Vérifie ton courriel pour confirmer ton compte.');
+  }
+}
+
+async function doLogout() {
+  const sb = getSB();
+  if(sb) await sb.auth.signOut();
+  currentUser = null;
+  showLoginScreen();
+}
+
+function showLoginError(msg) {
+  const err = document.getElementById('login-error');
+  if(err) { err.textContent = msg; err.style.display = 'block'; }
+}
+
+// Check auth on keypress (Enter to login)
+document.addEventListener('keydown', e => {
+  if(e.key === 'Enter' && document.getElementById('login-screen')?.style.display !== 'none') {
+    const extra = document.getElementById('signup-extra');
+    if(extra?.style.display !== 'none') doSignup();
+    else doLogin();
+  }
+});
+
+
+function _campTotalJours() {
+  return _periodes.reduce((s, p) => {
+    if(!p.debut || !p.fin) return s;
+    return s + Math.max(1, Math.round((new Date(p.fin+'T12:00') - new Date(p.debut+'T12:00')) / 86400000) + 1);
+  }, 0);
+}
+function campBudgetFromTotal() {
+  const total = parseFloat(document.getElementById('f-bud')?.value) || 0;
+  const jours = _campTotalJours();
+  const jourEl = document.getElementById('f-bud-jour');
+  if(jourEl && jours > 0) jourEl.value = (total / jours).toFixed(2);
+  renderPeriodes2();
+}
+function campBudgetFromJour() {
+  const perJour = parseFloat(document.getElementById('f-bud-jour')?.value) || 0;
+  const jours = _campTotalJours();
+  const budEl = document.getElementById('f-bud');
+  if(budEl && jours > 0) budEl.value = (perJour * jours).toFixed(2);
+  renderPeriodes2();
+}
+
+function renderPeriodes2() {
+  const list = $('plist'); if(!list) return;
+  const multi = _periodes.length > 1;
+  const totalBud = parseFloat($('f-bud') && $('f-bud').value) || 0;
+
+  list.innerHTML = _periodes.map((p, idx) => {
+    const days = (p.debut && p.fin) ? Math.max(1, Math.round((new Date(p.fin+'T12:00') - new Date(p.debut+'T12:00')) / 86400000) + 1) : 0;
+    const jourBud = (p.budget && days) ? (p.budget / days).toFixed(2) : '';
+    return '<div style="border:1px solid var(--b);border-radius:var(--r);padding:10px 12px;margin-bottom:6px;background:var(--bgh)">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:'+(multi?'8':'0')+'px">'
+        + '<span style="font-size:10px;font-weight:600;color:var(--t3);min-width:14px">' + (idx+1) + '</span>'
+        + '<input type="date" class="fi pi" style="flex:1;padding:5px 8px;font-size:12px" value="' + (p.debut||'') + '" data-pid="' + p.id + '" data-f="debut">'
+        + '<span style="color:var(--t3);font-size:11px">→</span>'
+        + '<input type="date" class="fi pi" style="flex:1;padding:5px 8px;font-size:12px" value="' + (p.fin||'') + '" data-pid="' + p.id + '" data-f="fin">'
+        + (days ? '<span style="font-size:10px;color:var(--t3);white-space:nowrap">'+days+' j.</span>' : '')
+        + (multi ? '<button style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:16px;padding:0 2px" class="pdel" data-pid="' + p.id + '">×</button>' : '')
+      + '</div>'
+      + (multi ? '<div style="display:flex;gap:8px;padding-left:22px">'
+          + '<div style="flex:1"><label style="font-size:10px;color:var(--t3);margin-bottom:2px;display:block">Budget ($)</label>'
+            + '<input type="number" class="fi pi" style="width:100%;padding:4px 7px;font-size:12px" value="' + (p.budget||0) + '" data-pid="' + p.id + '" data-f="budget" placeholder="0" min="0"></div>'
+          + '<div style="flex:1"><label style="font-size:10px;color:var(--t3);margin-bottom:2px;display:block">/ jour ($)</label>'
+            + '<input type="number" class="fi pi" style="width:100%;padding:4px 7px;font-size:12px" value="' + jourBud + '" data-pid="' + p.id + '" data-f="budgetJour" placeholder="auto" min="0"></div>'
+        + '</div>' : '')
+    + '</div>';
+  }).join('');
+
+  if(multi) {
+    const used = _periodes.reduce((s,p) => s+(p.budget||0), 0);
+    const ok = Math.abs(used - totalBud) < 1;
+    list.insertAdjacentHTML('beforeend',
+      '<div style="font-size:10.5px;text-align:right;margin-bottom:6px;font-weight:500;color:'+(ok?'#16a34a':'#d97706')+'">Total plages: '+fmtM(used)+' / '+fmtM(totalBud)+(ok?' ✓':' — écart: '+fmtM(Math.abs(used-totalBud)))+'</div>');
+  }
+
+  list.querySelectorAll('.pi').forEach(inp => inp.addEventListener('change', () => {
+    const p = _periodes.find(x => String(x.id) === String(inp.dataset.pid));
+    if(!p) return;
+    if(inp.dataset.f === 'budget') {
+      p.budget = parseFloat(inp.value)||0;
+      renderPeriodes2();
+    } else if(inp.dataset.f === 'budgetJour') {
+      const days = (p.debut && p.fin) ? Math.max(1, Math.round((new Date(p.fin+'T12:00') - new Date(p.debut+'T12:00')) / 86400000) + 1) : 0;
+      if(days > 0) { p.budget = Math.round((parseFloat(inp.value)||0) * days * 100)/100; renderPeriodes2(); }
+    } else {
+      p[inp.dataset.f] = inp.value;
+      const jours = _campTotalJours();
+      const total = parseFloat($('f-bud')?.value) || 0;
+      const jourEl = $('f-bud-jour');
+      if(jourEl && jours > 0 && total > 0) jourEl.value = (total / jours).toFixed(2);
+      renderPeriodes2();
+    }
+  }));
+  list.querySelectorAll('.pdel').forEach(btn => btn.addEventListener('click', () => removePeriode(parseInt(btn.dataset.pid))));
+}
+
+
+// ═══════════════════════════════════════════
+// APPROBATION
+// ═══════════════════════════════════════════
+const PLATEFORMES = ['Facebook','Instagram','LinkedIn','TikTok','Infolettre','SMS','Twitter/X','Google'];
+const PUB_STATUTS = [
+  {id:'attente', lbl:'En attente', cls:'ps-attente'},
+  {id:'approuve', lbl:'Approuvé', cls:'ps-approuve'},
+  {id:'rejete', lbl:'Rejeté', cls:'ps-rejete'},
+  {id:'revision', lbl:'Révision demandée', cls:'ps-revision'},
+];
+
+function makePubAddRow() {
+  return '<div style="display:flex;align-items:center;gap:7px;padding:9px 13px;border:1px dashed var(--b2);border-radius:var(--rl);cursor:pointer;color:var(--t3);font-size:11px;margin-top:6px;opacity:0.5;transition:opacity 0.1s" onclick="openAddPublication()" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.5\'"><span style="width:16px;height:16px;border-radius:50%;border:1px dashed currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:14px">+</span>Ajouter une publication</div>';
+}
+
+function renderPublications() {
+  const el = document.getElementById('publications-content');
+  if(!el) return;
+
+  const vue = window._pubVue || 'tableau';
+  const sorted = [...publications].sort((a,b) => (b.dateCreation||'').localeCompare(a.dateCreation||''));
+  const cols = pubStatuts && pubStatuts.length ? pubStatuts : [
+    {id:'attente',  lbl:'En attente',        color:'#d97706'},
+    {id:'approuve', lbl:'Approuvé',           color:'#16a34a'},
+    {id:'rejete',   lbl:'Rejeté',             color:'#dc2626'},
+    {id:'revision', lbl:'Révision demandée',  color:'#2563eb'},
+  ];
+
+  let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">'
+    + '<div style="display:flex;gap:2px;background:var(--bgh);border:1px solid var(--b);border-radius:var(--r);padding:2px">'
+      + '<button class="btn btn-sm'+(vue==='liste'?' btn-w':' btn-ghost')+'" onclick="window._pubVue=\'liste\';renderPublications()" style="padding:4px 12px">Liste</button>'
+      + '<button class="btn btn-sm'+(vue==='tableau'?' btn-w':' btn-ghost')+'" onclick="window._pubVue=\'tableau\';renderPublications()" style="padding:4px 12px">Tableau</button>'
+      + '<button class="btn btn-sm'+(vue==='calendrier'?' btn-w':' btn-ghost')+'" onclick="window._pubVue=\'calendrier\';renderPublications()" style="padding:4px 12px">Calendrier</button>'
+    + '</div>'
+    + (vue==='calendrier' ? '<button class="btn btn-ghost btn-sm" onclick="window._pubCalM=(window._pubCalM||new Date().getMonth())-1;if(window._pubCalM<0){window._pubCalM=11;window._pubCalY=(window._pubCalY||new Date().getFullYear())-1;}renderPublications()" style="padding:4px 8px">←</button>'
+      + '<span style="font-size:13px;font-weight:700;min-width:110px;text-align:center">'
+        + ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'][window._pubCalM!==undefined?window._pubCalM:new Date().getMonth()]
+        + ' ' + (window._pubCalY||new Date().getFullYear())
+      + '</span>'
+      + '<button class="btn btn-ghost btn-sm" onclick="window._pubCalM=(window._pubCalM!==undefined?window._pubCalM:new Date().getMonth())+1;if(window._pubCalM>11){window._pubCalM=0;window._pubCalY=(window._pubCalY||new Date().getFullYear())+1;}renderPublications()" style="padding:4px 8px">→</button>'
+      : '')
+  + '</div>';
+
+  if(vue === 'tableau') {
+    html += '<div style="display:grid;grid-template-columns:repeat('+cols.length+',1fr);gap:12px;align-items:start">';
+    cols.forEach(function(sec) {
+      const items = sorted.filter(function(p){ return p.statut === sec.id; });
+      html += '<div style="background:var(--bgp);border-radius:10px;padding:10px;min-height:100px;border:1px solid var(--b)"'
+        + ' ondragover="event.preventDefault()" ondrop="pubDrop(event,\''+sec.id+'\')">'
+        + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding:0 2px">'
+          + '<span style="width:7px;height:7px;border-radius:50%;background:'+sec.color+';flex-shrink:0"></span>'
+          + '<span style="font-size:11px;font-weight:700;color:'+sec.color+'">'+sec.lbl+'</span>'
+          + '<span style="font-size:10px;color:var(--t3);margin-left:auto;background:var(--bgh);padding:1px 6px;border-radius:8px;border:1px solid var(--b)">'+items.length+'</span>'
+        + '</div>';
+      items.forEach(function(p) {
+        const nbc = (p.commentaires||[]).length;
+        const plats = (p.plateformes||[p.plateforme]).filter(Boolean);
+        const assignName = p.assigneA ? getUserInitials(p.assigneA) : null;
+        html += '<div draggable="true" data-pid="'+p.id+'"'
+          + ' ondragstart="pubDragStart(event,\''+p.id+'\')" ondragend="this.style.opacity=\'1\'"'
+          + ' style="background:#fff;border:1px solid var(--b);border-radius:8px;padding:10px;margin-bottom:7px;cursor:grab;box-shadow:0 1px 3px rgba(0,0,0,0.05)">'
+          + (p.visuel ? '<img src="'+p.visuel+'" style="width:100%;height:120px;object-fit:cover;display:block;border-radius:5px;margin-bottom:8px">' : '')
+          + '<div style="font-size:12px;font-weight:600;color:var(--t);margin-bottom:6px;line-height:1.4">'+p.titre+'</div>'
+          + '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">'
+            + plats.map(function(pl){ return '<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:20px;background:var(--bgh);border:1px solid var(--b);color:var(--t2)">'+pl+'</span>'; }).join('')
+            + (p.datePubl ? '<span style="font-size:9px;color:var(--t3);padding:2px 7px;border-radius:20px;background:var(--bgh);border:1px solid var(--b)">'+fmtD(p.datePubl)+'</span>' : '')
+          + '</div>'
+          + '<div style="display:flex;align-items:center;gap:6px;padding-top:7px;border-top:1px solid var(--b)">'
+            + (assignName ? '<div style="width:22px;height:22px;border-radius:50%;background:var(--acc);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer" onclick="assignPub(\''+p.id+'\')">'+assignName+'</div>' : '')
+            + (nbc ? '<span style="font-size:10px;color:var(--t3);flex:1">'+nbc+' comm.</span>' : '<span style="flex:1"></span>')
+            + '<button class="btn btn-ghost btn-sm" onclick="assignPub(\''+p.id+'\')" style="font-size:10px;padding:3px 8px">Assigner</button>'
+            + '<button class="btn btn-ghost btn-sm" onclick="openEditPublication(\''+p.id+'\')" style="font-size:10px;padding:3px 8px">Modifier</button>'
+          + '</div>'
+        + '</div>';
+      });
+      html += '<div onclick="openAddPublicationInStatus(\''+sec.id+'\')" style="padding:7px;border-radius:7px;cursor:pointer;color:var(--t3);font-size:11px;text-align:center;border:1px dashed var(--b);margin-top:4px" onmouseover="this.style.background=\'var(--bgh)\';this.style.color=\'var(--t)\'" onmouseout="this.style.background=\'\';this.style.color=\'var(--t3)\'">+ Ajouter</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+  } else if(vue === 'calendrier') {
+    const cy = window._pubCalY !== undefined ? window._pubCalY : new Date().getFullYear();
+    const cm = window._pubCalM !== undefined ? window._pubCalM : new Date().getMonth();
+    if(window._pubCalY === undefined) { window._pubCalY = cy; window._pubCalM = cm; }
+    const firstDay = new Date(cy, cm, 1).getDay();
+    const daysInMonth = new Date(cy, cm+1, 0).getDate();
+    const today = new Date();
+    const JPUB = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+    const byDate = {};
+    sorted.forEach(function(p) {
+      if(p.datePubl) { if(!byDate[p.datePubl]) byDate[p.datePubl]=[]; byDate[p.datePubl].push(p); }
+    });
+    html += '<div style="border:1px solid var(--b);border-radius:12px;overflow:hidden">';
+    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);background:var(--bgp)">';
+    JPUB.forEach(function(j){ html += '<div style="padding:8px;text-align:center;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid var(--b)">'+j+'</div>'; });
+    html += '</div><div style="display:grid;grid-template-columns:repeat(7,1fr)">';
+    for(var oi=0;oi<firstDay;oi++) html += '<div style="background:#f7f7f9;min-height:90px;border-right:1px solid var(--b);border-bottom:1px solid var(--b)"></div>';
+    for(var dd=1;dd<=daysInMonth;dd++) {
+      const ds = cy+'-'+String(cm+1).padStart(2,'0')+'-'+String(dd).padStart(2,'0');
+      const isT = today.getFullYear()===cy && today.getMonth()===cm && today.getDate()===dd;
+      const pubs = byDate[ds]||[];
+      const isLastCol = (firstDay+dd-1)%7 === 6;
+      html += '<div style="background:#fff;min-height:90px;padding:6px;border-right:'+(isLastCol?'none':'1px solid var(--b)')+';border-bottom:1px solid var(--b)">';
+      html += '<div style="font-size:11px;font-weight:700;margin-bottom:4px;'+(isT?'display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#fff;font-size:10px':'color:var(--t3)')+'">'+dd+'</div>';
+      pubs.forEach(function(p) {
+        const st = cols.find(function(s){ return s.id===p.statut; })||cols[0];
+        html += '<div data-pid="'+p.id+'" class="pub-cal-item" style="font-size:9.5px;font-weight:600;padding:2px 6px;border-radius:4px;margin-bottom:2px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:'+st.color+'18;color:'+st.color+';border-left:2px solid '+st.color+'" title="'+p.titre+'">'+p.titre+'</div>';
+      });
+      html += '</div>';
+    }
+    const lastDay2 = new Date(cy, cm, daysInMonth).getDay();
+    for(var lj=lastDay2+1;lj<7;lj++) html += '<div style="background:#f7f7f9;min-height:90px;border-right:1px solid var(--b);border-bottom:1px solid var(--b)"></div>';
+    html += '</div></div>';
+    html += '<div style="margin-top:10px">'+makePubAddRow()+'</div>';
+
+  } else {
+    if(!sorted.length) {
+      html += '<div style="text-align:center;padding:40px;color:var(--t3);font-size:13px">Aucune publication — <span style="color:var(--acc);cursor:pointer" onclick="openAddPublication()">en créer une</span></div>';
+    } else {
+      html += '<div style="border:1px solid var(--b);border-radius:10px;overflow:hidden">';
+      sorted.forEach(function(p, i) {
+        const st = cols.find(function(s){ return s.id===p.statut; }) || cols[0];
+        const plats = (p.plateformes||[p.plateforme]).filter(Boolean);
+        const assignName = p.assigneA ? getUserInitials(p.assigneA) : null;
+        const isLast = i === sorted.length - 1;
+        html += '<div class="pub-list-row" data-pid="'+p.id+'" style="display:grid;grid-template-columns:4px 1fr auto auto auto;align-items:center;gap:0;'+(isLast?'':'border-bottom:1px solid var(--b)')+';background:#fff;transition:background 0.08s" onmouseover="this.style.background=\'#fafafe\'" onmouseout="this.style.background=\'#fff\'">'
+          + '<div style="background:'+st.color+';height:100%;min-height:52px"></div>'
+          + '<div style="padding:10px 14px;cursor:pointer;min-width:0" onclick="openEditPublication(\''+p.id+'\')">'
+            + '<div style="font-size:13px;font-weight:600;color:var(--t);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.titre+'</div>'
+            + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+              + '<span style="font-size:10px;font-weight:600;color:'+st.color+';background:'+st.color+'18;padding:1px 8px;border-radius:20px">'+st.lbl+'</span>'
+              + plats.map(function(pl){ return '<span style="font-size:10px;color:var(--t3);background:var(--bgh);padding:1px 7px;border-radius:20px;border:1px solid var(--b)">'+pl+'</span>'; }).join('')
+              + (p.datePubl ? '<span style="font-size:10px;color:var(--t3)">'+fmtD(p.datePubl)+'</span>' : '')
+            + '</div>'
+          + '</div>'
+          + '<div style="padding:0 10px">'
+            + (assignName
+                ? '<div style="width:26px;height:26px;border-radius:50%;background:var(--acc);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="assignPub(\''+p.id+'\')" title="Réassigner">'+assignName+'</div>'
+                : '<div style="width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--b2);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t3);font-size:14px" onclick="assignPub(\''+p.id+'\')" title="Assigner">+</div>')
+          + '</div>'
+          + '<div style="padding:0 8px">'
+            + ((p.commentaires||[]).length
+                ? '<button class="btn btn-ghost btn-sm" onclick="openCommentModal(\''+p.id+'\')" style="font-size:10px;color:var(--t3)">'+p.commentaires.length+' comm.</button>'
+                : '<button class="btn btn-ghost btn-sm" onclick="openCommentModal(\''+p.id+'\')" style="font-size:10px;color:var(--t3);opacity:0.4">Commenter</button>')
+          + '</div>'
+          + '<div style="padding:0 12px 0 4px"><button class="pub-del-btn" data-pid="'+p.id+'" style="opacity:0.25;transition:opacity 0.1s" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.25\'">×</button></div>'
+        + '</div>';
+      });
+      html += '</div>';
+    }
+    html += '<div style="margin-top:10px">'+makePubAddRow()+'</div>';
+  }
+
+  el.innerHTML = html;
+
+  el.querySelectorAll('.pub-cal-item').forEach(function(div) {
+    div.addEventListener('click', function() { openEditPublication(div.dataset.pid); });
+  });
+
+  el.querySelectorAll('.pub-del-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      snapshot(); publications = publications.filter(function(x){ return x.id!==btn.dataset.pid; });
+      renderPublications(); toast('Supprimé');
+    });
+  });
+}
+// Kanban drag and drop
+let _dragPubId = null;
+function pubDragStart(e, id) {
+  _dragPubId = id;
+  e.target.style.opacity = '0.4';
+  e.dataTransfer.effectAllowed = 'move';
+}
+function pubDrop(e, newStatus) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if(!_dragPubId) return;
+  const p = publications.find(x => x.id === _dragPubId);
+  if(p && p.statut !== newStatus) {
+    snapshot();
+    p.statut = newStatus;
+    renderPublications();
+    toast('Statut mis à jour');
+  }
+  _dragPubId = null;
+}
+
+function openAddPublicationInStatus(statut) {
+  window._pubDefaultStatut = statut;
+  openAddPublication();
+}
+
+
+function setPublicationStatut(id, statut) {
+  const p = publications.find(x=>x.id===id); if(!p) return;
+  snapshot();
+  p.statut = statut;
+  renderPublications();
+  toast(statut==='approuve' ? 'Publication approuvée' : 'Publication rejetée');
+}
+
+function openAddPublication() {
+  showModal(pubModalHTML(null));
+  wirePubModal(null);
+}
+
+function openEditPublication(id) {
+  const p = publications.find(x=>x.id===id); if(!p) return;
+  showModal(pubModalHTML(p));
+  wirePubModal(p);
+}
+
+function pubModalHTML(p) {
+  const isE = !!p;
+  const cur = p || {titre:'',plateformes:[],datePubl:'',message:'',visuel:'',statut:window._pubDefaultStatut||'attente'}; window._pubDefaultStatut=null;
+  const selPlats = cur.plateformes || (cur.plateforme ? [cur.plateforme] : []);
+  const cols = pubStatuts && pubStatuts.length ? pubStatuts : [
+    {id:'attente',color:'#d97706',lbl:'En attente'},{id:'approuve',color:'#16a34a',lbl:'Approuvé'},
+    {id:'rejete',color:'#dc2626',lbl:'Rejeté'},{id:'revision',color:'#2563eb',lbl:'Révision'},
+  ];
+
+  // Platform pills (no native checkbox)
+  const platsHtml = PLATEFORMES.map(pl => {
+    const sel = selPlats.includes(pl);
+    return '<div class="pub-plat-pill'+(sel?' pub-plat-sel':'')+'" data-pl="'+pl+'" style="padding:5px 12px;border-radius:20px;cursor:pointer;font-size:11.5px;font-weight:500;border:1.5px solid '+(sel?'var(--acc)':'var(--b)')+';background:'+(sel?'var(--acc)':'transparent')+';color:'+(sel?'#fff':'var(--t2)')+';transition:all 0.12s;user-select:none">'+pl+'</div>';
+  }).join('');
+
+  // Status pills
+  const statHtml = cols.map(s => {
+    const sel = s.id === cur.statut;
+    return '<div class="pub-stat-pill" data-sid="'+s.id+'" style="padding:5px 12px;border-radius:20px;cursor:pointer;font-size:11.5px;font-weight:600;border:1.5px solid '+(sel?s.color:'var(--b)')+';background:'+(sel?s.color+'18':'transparent')+';color:'+(sel?s.color:'var(--t3)')+';transition:all 0.12s;user-select:none">'+s.lbl+'</div>';
+  }).join('');
+
+  // Date display
+  const dateDisplay = cur.datePubl ? new Date(cur.datePubl+'T12:00').toLocaleDateString('fr-CA',{weekday:'short',day:'numeric',month:'long',year:'numeric'}) : 'Choisir une date';
+
+  return '<div class="mhdr"><div class="mtitle">'+(isE?'Modifier':'Nouvelle publication')+'</div><button class="mclose" onclick="closeModal()">×</button></div>'
+    // Titre
+    +'<div class="fg"><input class="fi" id="f-pub-titre" value="'+cur.titre+'" placeholder="Titre de la publication" autofocus style="font-size:15px;font-weight:600;border:none;border-bottom:2px solid var(--b);border-radius:0;padding:6px 0;background:transparent"></div>'
+    // Two columns: left = date+statut, right = visuel
+    +'<div style="display:grid;grid-template-columns:1fr 140px;gap:14px;margin-top:4px">'
+      // Left col
+      +'<div>'
+        // Date
+        +'<div class="fg" style="margin-bottom:10px"><label class="fl">Date</label><input type="date" id="f-pub-date" class="fi" value="'+(cur.datePubl||'')+'">'+'</div>'
+        // Statut
+        +'<div class="fg"><label class="fl">Statut</label><div style="display:flex;flex-wrap:wrap;gap:5px" id="f-pub-stat-pills">'+statHtml+'</div><input type="hidden" id="f-pub-statut" value="'+cur.statut+'"></div>'
+      +'</div>'
+      // Right col - visuel
+      +'<div class="fg"><label class="fl">Visuel</label>'
+        +'<div id="f-pub-visuel-zone" style="width:140px;height:105px;border:2px dashed var(--b);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:border-color 0.12s;background:var(--bgp)" onclick="$(\'f-pub-file\').click()">'
+          +(cur.visuel
+            ? '<img src="'+cur.visuel+'" style="width:100%;height:100%;object-fit:cover">'
+            : '<span style="font-size:22px;opacity:0.3">+</span><span style="font-size:10px;color:var(--t3);margin-top:4px">Cliquer ou glisser</span>')
+        +'</div>'
+        +'<input type="file" id="f-pub-file" accept="image/*" style="display:none">'
+        +'<input type="hidden" id="f-pub-visuel-cur" value="'+(cur.visuel||'')+'">'
+        +'<div id="f-pub-preview"></div>'
+      +'</div>'
+    +'</div>'
+    // Plateformes
+    +'<div class="fg"><label class="fl">Plateformes</label><div style="display:flex;flex-wrap:wrap;gap:5px" id="f-pub-plats">'+platsHtml+'</div></div>'
+    // Message
+    +'<div class="fg"><label class="fl">Message / Légende</label><textarea class="fta" id="f-pub-msg" style="min-height:60px;resize:vertical" placeholder="Texte de la publication...">'+cur.message+'</textarea></div>'
+    +'<div class="mactions">'+(isE?'<button class="btn btn-sm" style="color:#e74c3c;margin-right:auto" id="btn-delpub">Supprimer</button>':'')+'<button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-w" id="btn-savpub">Enregistrer</button></div>';
+}
+
+function wirePubModal(p) {
+  setTimeout(() => {
+    // Platform pills toggle
+    document.querySelectorAll('.pub-plat-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        pill.classList.toggle('pub-plat-sel');
+        const sel = pill.classList.contains('pub-plat-sel');
+        pill.style.background = sel ? 'var(--acc)' : 'transparent';
+        pill.style.borderColor = sel ? 'var(--acc)' : 'var(--b)';
+        pill.style.color = sel ? '#fff' : 'var(--t2)';
+      });
+    });
+
+    // Status pills toggle
+    document.querySelectorAll('.pub-stat-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        const cols = pubStatuts && pubStatuts.length ? pubStatuts : [
+          {id:'attente',color:'#d97706'},{id:'approuve',color:'#16a34a'},
+          {id:'rejete',color:'#dc2626'},{id:'revision',color:'#2563eb'},
+        ];
+        document.querySelectorAll('.pub-stat-pill').forEach(pp => {
+          const c = cols.find(s=>s.id===pp.dataset.sid)||{color:'#888'};
+          pp.style.background = 'transparent'; pp.style.borderColor = 'var(--b)'; pp.style.color = 'var(--t3)';
+        });
+        const c = cols.find(s=>s.id===pill.dataset.sid)||{color:'#888'};
+        pill.style.background = c.color+'18'; pill.style.borderColor = c.color; pill.style.color = c.color;
+        document.getElementById('f-pub-statut').value = pill.dataset.sid;
+      });
+    });
+
+    // Image upload
+    if(fileInput) {
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0]; if(!file) return;
+        const zone = $('f-pub-visuel-zone');
+        const cur = $('f-pub-visuel-cur');
+        const btn = $('btn-savpub');
+        // Show preview immediately
+        const localUrl = URL.createObjectURL(file);
+        if(zone) zone.innerHTML = '<img src="'+localUrl+'" style="width:100%;height:100%;object-fit:cover">';
+        if(btn) btn.disabled = true;
+        try {
+          const sb = getSB(); if(!sb) throw new Error('Supabase non disponible');
+          const ext = file.name.split('.').pop();
+          const path = 'pub-'+Date.now()+'-'+Math.random().toString(36).slice(2)+'.'+ext;
+          const { data, error } = await sb.storage.from('publications').upload(path, file, {cacheControl:'3600',upsert:false});
+          if(error) throw new Error(error.message);
+          const { data: urlData } = sb.storage.from('publications').getPublicUrl(path);
+          if(cur) cur.value = urlData.publicUrl;
+        } catch(e) {
+          if(zone) zone.innerHTML = '<span style="font-size:10px;color:#e74c3c;padding:8px;text-align:center">Erreur: '+e.message+'</span>';
+        } finally {
+          if(btn) btn.disabled = false;
+        }
+      });
+    }
+    $('btn-savpub').onclick = () => {
+      try {
+        const titre = $('f-pub-titre').value.trim(); if(!titre){toast('Donne un titre');return;}
+        const visuel = $('f-pub-visuel-cur') ? $('f-pub-visuel-cur').value : (p ? p.visuel : '');
+        const plateformes = [...document.querySelectorAll('.pub-plat-pill.pub-plat-sel')].map(el=>el.dataset.pl);
+        const data = {
+          titre, plateformes,
+          datePubl: $('f-pub-date').value,
+          message: $('f-pub-msg').value,
+          statut: $('f-pub-statut').value,
+          visuel: visuel,
+        };
+        snapshot();
+        if(p) { Object.assign(p, data); }
+        else { publications.push({id:'pub'+(++idCtr), ...data, dateCreation: new Date().toISOString(), commentaires:[]}); }
+        closeModal();
+        renderPublications();
+        toast(p ? 'Publication modifiée' : 'Publication ajoutée');
+      } catch(e) { toast('Erreur: '+e.message); }
+    };
+    if($('btn-delpub')) $('btn-delpub').onclick = () => {
+      snapshot();
+      publications = publications.filter(x=>x.id!==p.id);
+      closeModal(); renderPublications(); toast('Supprimé');
+    };
+  }, 0);
+}
+
+function openCommentModal(id) {
+  const p = publications.find(x=>x.id===id); if(!p) return;
+  const comments = p.commentaires||[];
+  showModal(
+    '<div class="mhdr"><div class="mtitle">Commentaires — '+p.titre+'</div><button class="mclose" onclick="closeModal()">×</button></div>'
+    +'<div style="max-height:250px;overflow-y:auto;margin-bottom:11px">'
+      +(comments.length ? comments.map(c=>'<div style="background:var(--bgh);border-radius:var(--r);padding:8px 10px;font-size:11.5px;margin-bottom:6px"><div style="font-size:10px;font-weight:600;color:var(--t3);margin-bottom:2px">'+c.auteur+' · '+fmtD(c.date)+'</div>'+c.texte+'</div>').join('') : '<div style="text-align:center;padding:16px;color:var(--t3);font-size:12px">Aucun commentaire</div>')
+    +'</div>'
+    +'<div class="fg"><label class="fl">Ajouter un commentaire</label><textarea class="fta" id="f-comment" style="min-height:60px" placeholder="Ton commentaire..."></textarea></div>'
+    +'<div class="mactions"><button class="btn" onclick="closeModal()">Fermer</button><button class="btn btn-w" id="btn-addcomment">Envoyer</button></div>'
+  );
+  setTimeout(() => {
+    $('btn-addcomment').onclick = () => {
+      const txt = $('f-comment').value.trim(); if(!txt) return;
+      const auteur = currentUser ? (currentUser.user_metadata?.nom || currentUser.email.split('@')[0]) : 'Utilisateur';
+      snapshot();
+      if(!p.commentaires) p.commentaires = [];
+      p.commentaires.push({auteur, texte: txt, date: new Date().toISOString().slice(0,10)});
+      closeModal(); renderPublications(); toast('Commentaire ajouté');
+    };
+  }, 0);
+}
+
+
+// ═══════════════════════════════════════════
+// BUILD UP CHART
+// ═══════════════════════════════════════════
+function renderBuildupChart() {
+  const el = document.getElementById('h-buildup');
+  const totalEl = document.getElementById('chart-total');
+  if(!el) return;
+
+  const all = allCamps();
+  if(!all.length) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t3);font-size:12px">Aucune campagne</div>';
+    return;
+  }
+
+  // Find date range across all campaigns + matches
+  const allDates = [];
+  all.forEach(c => { if(c.debut) allDates.push(c.debut); if(c.fin) allDates.push(c.fin); });
+  matchs.forEach(m => { if(m.date) allDates.push(m.date); });
+  if(!allDates.length) return;
+
+  allDates.sort();
+  const startDate = new Date(allDates[0]+'T12:00');
+  const endDate = new Date(allDates[allDates.length-1]+'T12:00');
+  const totalDays = Math.ceil((endDate - startDate) / 86400000) + 1;
+
+  // Build daily budget array
+  const dailyBudget = new Array(totalDays).fill(0);
+  all.forEach(c => {
+    if(!c.debut || !c.fin || !c.budget) return;
+    const s = new Date(c.debut+'T12:00');
+    const e = new Date(c.fin+'T12:00');
+    const days = Math.max(1, Math.ceil((e - s) / 86400000) + 1);
+    const perDay = c.budget / days;
+    for(let d = 0; d < days; d++) {
+      const dayIdx = Math.floor((new Date(s.getTime() + d*86400000) - startDate) / 86400000);
+      if(dayIdx >= 0 && dayIdx < totalDays) dailyBudget[dayIdx] += perDay;
+    }
+  });
+
+  // Cumulative
+  const cumulative = [];
+  let sum = 0;
+  dailyBudget.forEach(v => { sum += v; cumulative.push(sum); });
+  const maxVal = sum || 1;
+  if(totalEl) totalEl.textContent = fmtM(Math.round(sum));
+
+  // SVG dimensions
+  const W = el.offsetWidth || 600;
+  const H = 180;
+  const PL = 55, PR = 16, PT = 12, PB = 28;
+  const CW = W - PL - PR;
+  const CH = H - PT - PB;
+
+  // Helper: date index to x
+  const xi = i => PL + (i / (totalDays-1)) * CW;
+  const yi = v => PT + CH - (v / maxVal) * CH;
+
+  // Build SVG
+  let svg = '<svg width="'+W+'" height="'+H+'" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible">';
+
+  // Y grid lines + labels
+  const ySteps = 4;
+  for(let i = 0; i <= ySteps; i++) {
+    const v = (maxVal / ySteps) * i;
+    const y = yi(v);
+    svg += '<line x1="'+PL+'" y1="'+y+'" x2="'+(W-PR)+'" y2="'+y+'" stroke="rgba(0,0,0,0.06)" stroke-width="1"/>';
+    svg += '<text x="'+(PL-6)+'" y="'+(y+4)+'" text-anchor="end" font-size="9" fill="#aaa">'+fmtM(Math.round(v)).replace('$','$').replace(/,/g,' ')+'</text>';
+  }
+
+  // X axis month labels
+  const months = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  let lastMonth = -1;
+  for(let i = 0; i < totalDays; i++) {
+    const d = new Date(startDate.getTime() + i*86400000);
+    if(d.getDate() === 1 || (i === 0)) {
+      if(d.getMonth() !== lastMonth) {
+        lastMonth = d.getMonth();
+        const x = xi(i);
+        svg += '<line x1="'+x+'" y1="'+PT+'" x2="'+x+'" y2="'+(PT+CH)+'" stroke="rgba(0,0,0,0.08)" stroke-width="1" stroke-dasharray="3,3"/>';
+        svg += '<text x="'+x+'" y="'+(PT+CH+16)+'" text-anchor="middle" font-size="9" fill="#aaa">'+months[d.getMonth()]+'</text>';
+      }
+    }
+  }
+
+  // Home game markers (vertical colored bands)
+  const domMatchs = matchs.filter(m => m.domicile && m.date);
+  domMatchs.forEach(m => {
+    const d = new Date(m.date+'T12:00');
+    const dayIdx = Math.floor((d - startDate) / 86400000);
+    if(dayIdx < 0 || dayIdx >= totalDays) return;
+    const x = xi(dayIdx);
+    const c = MCOLORS[m.couleur] || MCOLORS.jaune;
+    // Colored dot at bottom of chart
+    svg += '<line x1="'+x+'" y1="'+(PT+CH+3)+'" x2="'+x+'" y2="'+(PT+CH+7)+'" stroke="'+c.dot+'" stroke-width="2"/>';
+    // Light vertical band
+    svg += '<rect x="'+(x-1)+'" y="'+PT+'" width="2" height="'+CH+'" fill="'+c.dot+'" opacity="0.15"/>';
+  });
+
+  // Away game markers (subtle gray ticks)
+  const extMatchs = matchs.filter(m => !m.domicile && m.date);
+  extMatchs.forEach(m => {
+    const d = new Date(m.date+'T12:00');
+    const dayIdx = Math.floor((d - startDate) / 86400000);
+    if(dayIdx < 0 || dayIdx >= totalDays) return;
+    const x = xi(dayIdx);
+    svg += '<line x1="'+x+'" y1="'+(PT+CH+3)+'" x2="'+x+'" y2="'+(PT+CH+6)+'" stroke="#ccc" stroke-width="1"/>';
+  });
+
+  // Build path for cumulative line
+  let path = '';
+  let areaPath = '';
+  for(let i = 0; i < totalDays; i++) {
+    const x = xi(i);
+    const y = yi(cumulative[i]);
+    if(i === 0) { path += 'M '+x+' '+y; areaPath = 'M '+x+' '+(PT+CH)+' L '+x+' '+y; }
+    else { path += ' L '+x+' '+y; areaPath += ' L '+x+' '+y; }
+  }
+  areaPath += ' L '+xi(totalDays-1)+' '+(PT+CH)+' Z';
+
+  // Area fill
+  svg += '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5b4ef8" stop-opacity="0.15"/><stop offset="100%" stop-color="#5b4ef8" stop-opacity="0.01"/></linearGradient></defs>';
+  svg += '<path d="'+areaPath+'" fill="url(#bg)"/>';
+  svg += '<path d="'+path+'" fill="none" stroke="#5b4ef8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+
+  // Legend
+  const legendY = PT + CH + 22;
+  const lx = W - PR - 180;
+  svg += '<circle cx="'+(lx)+'" cy="'+legendY+'" r="3" fill="#4ade80"/><text x="'+(lx+7)+'" y="'+(legendY+4)+'" font-size="9" fill="#888">Domicile élevé</text>';
+  svg += '<circle cx="'+(lx+80)+'" cy="'+legendY+'" r="3" fill="#fbbf24"/><text x="'+(lx+87)+'" y="'+(legendY+4)+'" font-size="9" fill="#888">Moyen</text>';
+  svg += '<circle cx="'+(lx+125)+'" cy="'+legendY+'" r="3" fill="#ef4444"/><text x="'+(lx+132)+'" y="'+(legendY+4)+'" font-size="9" fill="#888">Faible</text>';
+
+  svg += '</svg>';
+  el.innerHTML = svg;
+}
+
+// ── INIT ──
+// Hide app until auth is checked
+document.querySelector('.sidebar').style.display = 'none';
+document.querySelector('.main').style.display = 'none';
+document.querySelector('.sb-item[data-view="home"]').classList.add('active');
+navTo('home');
+
+// Check existing session
+(async () => {
+  const sb = getSB();
+  if(!sb) {
+    // No Supabase - just load from localStorage and show app
+    loadFromLS_fallback();
+    render(currentView);
+    document.querySelector('.sidebar').style.display = '';
+    document.querySelector('.main').style.display = '';
+    return;
+  }
+  const { data: { session } } = await sb.auth.getSession();
+  if(session?.user) {
+    showApp(session.user);
+    loadFromDB().then(loaded => { if(loaded) render(currentView); });
+  } else {
+    showLoginScreen();
+  }
+  // Listen for auth changes
+  sb.auth.onAuthStateChange((event, session) => {
+    if(event === 'SIGNED_IN' && session?.user) showApp(session.user);
+    if(event === 'SIGNED_OUT') showLoginScreen();
+  });
+})();
+
+
+
+
+  // Delete group
+  ($('camp-content')||{querySelectorAll:()=>[]}).querySelectorAll('.grp-del-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const gid = btn.dataset.gid;
+      const g = GROUPS.find(x => x.id === gid);
+      if(!g) return;
+      const items = allCamps().filter(c => c._groupId === gid);
+      const msg = items.length
+        ? 'Supprimer "'+g.label+'" et ses '+items.length+' campagne(s) ?'
+        : 'Supprimer le groupe "'+g.label+'" ?';
+      if(!confirm(msg)) return;
+      snapshot();
+      GROUPS = GROUPS.filter(x => x.id !== gid);
+      partenariats = partenariats.filter(c => c._groupId !== gid);
+      placements = placements.filter(c => c._groupId !== gid);
+      renderCampagnes();
+      toast('Groupe supprimé');
+    });
+  });
+
+function snapshot() {
+  const state = {
+    partenariats: JSON.parse(JSON.stringify(partenariats)),
+    placements: JSON.parse(JSON.stringify(placements)),
+    deals: JSON.parse(JSON.stringify(deals)),
+    evenements: JSON.parse(JSON.stringify(evenements)),
+    matchs: JSON.parse(JSON.stringify(matchs)),
+    evenementsBase: JSON.parse(JSON.stringify(evenementsBase)),
+    GROUPS: GROUPS.map(g => { const {filter,...rest} = g; return rest; }),
+    planifications: JSON.parse(JSON.stringify(planifications)),
+    budgetGlobal: budgetGlobal,
+    publications: JSON.parse(JSON.stringify(publications)),
+    pubStatuts: JSON.parse(JSON.stringify(pubStatuts)),
+  };
+  undoStack.push(JSON.stringify(state));
+  if(undoStack.length > 20) undoStack.shift();
+  redoStack = [];
+  updateUndoBtns();
+  scheduleSave(); // auto-save via Supabase (debounced)
+}
+function applyState(s) {
+  const d = JSON.parse(s);
+  applyStateData(d);
+  scheduleSave();
+}
+function undo() {
+  if(!undoStack.length) return;
+  // Save current to redo
+  const cur = {
+    partenariats:JSON.parse(JSON.stringify(partenariats)),
+    placements:JSON.parse(JSON.stringify(placements)),
+    deals:JSON.parse(JSON.stringify(deals)),
+    evenements:JSON.parse(JSON.stringify(evenements)),
+    matchs:JSON.parse(JSON.stringify(matchs)),
+    evenementsBase:JSON.parse(JSON.stringify(evenementsBase)),
+    GROUPS:GROUPS.map(g=>{const{filter,...r}=g;return r;}),
+    planifications:JSON.parse(JSON.stringify(planifications)),
+    budgetGlobal,
+  };
+  redoStack.push(JSON.stringify(cur));
+  applyState(undoStack.pop());
+  updateUndoBtns();
+  rerender();
+  toast('Annulé Annuler');
+}
+
+
+function redo() {
+  if(!redoStack.length) return;
+  const cur = {
+    partenariats:JSON.parse(JSON.stringify(partenariats)),
+    placements:JSON.parse(JSON.stringify(placements)),
+    deals:JSON.parse(JSON.stringify(deals)),
+    evenements:JSON.parse(JSON.stringify(evenements)),
+    matchs:JSON.parse(JSON.stringify(matchs)),
+    evenementsBase:JSON.parse(JSON.stringify(evenementsBase)),
+    GROUPS:GROUPS.map(g=>{const{filter,...r}=g;return r;}),
+    planifications:JSON.parse(JSON.stringify(planifications)),
+    budgetGlobal,
+  };
+  undoStack.push(JSON.stringify(cur));
+  applyState(redoStack.pop());
+  updateUndoBtns();
+  rerender();
+  toast('Refait Refaire');
+}
+
+
+function updateUndoBtns() {
+  const u=$('btn-undo'), r=$('btn-redo');
+  u.disabled=!undoStack.length; r.disabled=!redoStack.length;
+  u.title='Annuler'+(undoStack.length?' ('+undoStack.length+')':''); r.title='Refaire'+(redoStack.length?' ('+redoStack.length+')':'');
+}
+
+function openEditModal(id){
+  const item=findItem(id);if(!item)return;
+  const kind=itemKind(id);
+  const sOpts=['planifie','actif','pause','termine'].map(s=>'<option value="'+s+'"'+(s===item.statut?' selected':'')+'>'+(s==='planifie'?'Planifié':s==='actif'?'Actif':s==='pause'?'En pause':'Terminé')+'</option>').join('');
+  let extra='';
+  if(kind==='part'){
+    extra='<div class="fg2"><div class="fg"><label class="fl">Type média</label><select class="fs" id="f-type"><option value="radio"'+(item.type==='radio'?' selected':'')+'>Radio</option><option value="journal"'+(item.type==='journal'?' selected':'')+'>Journal</option></select></div>'
+      +'<div class="fg"><label class="fl">Marché</label><select class="fs" id="f-marche">'+['Québec','Trois-Rivières','Montréal','Autre'].map(m=>'<option'+(m===item.marche?' selected':'')+'>'+m+'</option>').join('')+'</select></div></div>'
+      +'<div class="fg2"><div class="fg"><label class="fl">Passages faits</label><input type="number" class="fi" id="f-pf" value="'+(item.passagesFaits||0)+'"></div><div class="fg"><label class="fl">Passages total</label><input type="number" class="fi" id="f-pt" value="'+(item.passages||0)+'"></div></div>';
+  } else {
+    extra='<div class="fg2"><div class="fg"><label class="fl">Canal</label><select class="fs" id="f-canal">'+['google','facebook','infolettre','sms'].map(c=>'<option value="'+c+'"'+(c===item.canal?' selected':'')+'>'+(c==='google'?'Google Ads':c==='facebook'?'Facebook/IG':c==='infolettre'?'Infolettre':'SMS')+'</option>').join('')+'</select></div>'
+      +'<div class="fg"><label class="fl">Dépensé ($)</label><input type="number" class="fi" id="f-dep" value="'+(item.depense||0)+'"></div></div>'
+      +'<div class="fg2"><div class="fg"><label class="fl">Impressions</label><input type="number" class="fi" id="f-imp" value="'+(item.impressions||0)+'"></div><div class="fg"><label class="fl">Clics</label><input type="number" class="fi" id="f-clics" value="'+(item.clics||0)+'"></div></div>';
+  }
+  showModal('<div class="mhdr"><div class="mtitle">'+item.nom+'</div><button class="mclose" onclick="closeModal()">×</button></div>'
+    +'<div class="fg"><label class="fl">Nom</label><input class="fi" id="f-nom" value="'+item.nom+'"></div>'
+    +'<div class="fg2"><div class="fg"><label class="fl">Budget ($)</label><input type="number" class="fi" id="f-bud" value="'+item.budget+'"></div><div class="fg"><label class="fl">Statut</label><select class="fs" id="f-st">'+sOpts+'</select></div></div>'
+    +'<div class="fg2"><div class="fg"><label class="fl">Date début</label><input type="date" class="fi" id="f-debut" value="'+(item.debut||'')+'"></div><div class="fg"><label class="fl">Date fin</label><input type="date" class="fi" id="f-fin" value="'+(item.fin||'')+'"></div></div>'
+    +extra
+    +'<div class="fg"><label class="fl">Notes</label><textarea class="fta" id="f-notes">'+(item.notes||'')+'</textarea></div>'
+    +'<div class="mactions"><button class="btn btn-sm" style="color:var(--t3)" id="btn-del-item">Supprimer</button><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-white" id="btn-save-item">Enregistrer</button></div>');
+  $('btn-save-item').onclick=()=>{
+    snapshot();
+    item.nom=$('f-nom').value;item.budget=parseFloat($('f-bud').value)||0;
+    item.statut=$('f-st').value;item.debut=$('f-debut').value;item.fin=$('f-fin').value;item.notes=$('f-notes').value;
+    if(kind==='part'){item.type=$('f-type').value;item.marche=$('f-marche').value;item.passagesFaits=parseInt($('f-pf').value)||0;item.passages=parseInt($('f-pt').value)||0;}
+    else{item.canal=$('f-canal').value;item.depense=parseFloat($('f-dep').value)||0;item.impressions=parseInt($('f-imp').value)||0;item.clics=parseInt($('f-clics').value)||0;}
+    closeModal();rerender();toast('Modifié');
+  };
+  $('btn-del-item').onclick=()=>{
+    snapshot();
+    if(kind==='part')partenariats=partenariats.filter(x=>x.id!==id);
+    else placements=placements.filter(x=>x.id!==id);
+    closeModal();rerender();toast('Supprimé');
+  };
+}
+
+// PLANIFICATEUR IA
+
+
+// Gantt drag-to-pan
+(function(){
+  let panning=false, panStartX=0, panStartScroll=0, panMoved=false;
+  document.addEventListener('DOMContentLoaded', ()=>{});
+  function initGanttPan(){
+    const el=document.querySelector('.gantt-scroll');
+    if(!el||el._panInit) return;
+    el._panInit=true;
+    el.addEventListener('mousedown',e=>{
+      if(e.target.closest('.gbar,.grz,.gil,.gcat-row')) return;
+      panning=true; panMoved=false;
+      panStartX=e.clientX; panStartScroll=el.scrollLeft;
+      el.classList.add('panning');
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove',e=>{
+      if(!panning) return;
+      const dx=e.clientX-panStartX;
+      if(Math.abs(dx)>3) panMoved=true;
+      el.scrollLeft=panStartScroll-dx;
+    });
+    document.addEventListener('mouseup',()=>{
+      if(!panning) return;
+      panning=false;
+      document.querySelector('.gantt-scroll')?.classList.remove('panning');
+    });
+    // Touch support
+    el.addEventListener('touchstart',e=>{
+      panStartX=e.touches[0].clientX; panStartScroll=el.scrollLeft; panning=true;
+    },{passive:true});
+    el.addEventListener('touchmove',e=>{
+      if(!panning) return;
+      el.scrollLeft=panStartScroll-(e.touches[0].clientX-panStartX);
+    },{passive:true});
+    el.addEventListener('touchend',()=>{panning=false;});
+  }
+  // Init after each render
+  const orig=window.renderGanttFull;
+  if(orig) window._ganttPanHooked=true;
+  setInterval(initGanttPan, 500);
+})();
+
+async function sb2Invoke(fnName, bodyStr) {
+  const body = typeof bodyStr === 'string' ? bodyStr : JSON.stringify(bodyStr);
+  const resp = await fetch('https://qqxhjchybvscbxxewbkx.supabase.co/functions/v1/anthropic-proxy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body
+  });
+  if(!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error('Erreur API ' + resp.status + ': ' + JSON.stringify(err));
+  }
+  return resp;
+}
+
+function openGererColonnes() {
+  const renderRows = () => pubStatuts.map((s, i) =>
+    '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--b)">'
+      + '<input type="color" value="'+s.color+'" data-ci="'+i+'" style="width:28px;height:28px;border:none;cursor:pointer;border-radius:4px;padding:0" title="Couleur">'
+      + '<input class="fi" data-li="'+i+'" value="'+s.lbl+'" style="flex:1;padding:4px 8px;font-size:12.5px">'
+      + (pubStatuts.length > 1
+        ? '<button class="btn btn-ghost btn-sm" data-di="'+i+'" style="color:var(--t3);padding:2px 7px">×</button>'
+        : '')
+    + '</div>'
+  ).join('');
+
+  showModal(
+    '<div class="mhdr"><div class="mtitle">Gérer les colonnes</div><button class="mclose" onclick="closeModal()">×</button></div>'
+    + '<div id="col-rows">' + renderRows() + '</div>'
+    + '<button class="btn btn-ghost btn-sm" id="btn-add-col" style="width:100%;justify-content:center;margin-top:9px;border-style:dashed">+ Ajouter une colonne</button>'
+    + '<div class="mactions"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-w" id="btn-save-cols">Enregistrer</button></div>'
+  );
+
+  setTimeout(() => {
+    const wire = () => {
+      const el = document.getElementById('col-rows');
+      el.querySelectorAll('input[data-li]').forEach(inp => {
+        inp.addEventListener('input', () => { pubStatuts[+inp.dataset.li].lbl = inp.value; });
+      });
+      el.querySelectorAll('input[data-ci]').forEach(inp => {
+        inp.addEventListener('input', () => { pubStatuts[+inp.dataset.ci].color = inp.value; });
+      });
+      el.querySelectorAll('button[data-di]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          pubStatuts.splice(+btn.dataset.di, 1);
+          document.getElementById('col-rows').innerHTML = renderRows();
+          wire();
+        });
+      });
+    };
+    wire();
+
+    document.getElementById('btn-add-col').onclick = () => {
+      pubStatuts.push({id:'col'+(++idCtr), lbl:'Nouvelle colonne', color:'#888884'});
+      document.getElementById('col-rows').innerHTML = renderRows();
+      wire();
+    };
+
+    document.getElementById('btn-save-cols').onclick = () => {
+      snapshot();
+      closeModal();
+      renderPublications();
+      toast('Colonnes mises à jour');
+    };
+  }, 0);
+}
+
+
+async function loadProfiles() {
+  const sb = getSB(); if(!sb) return;
+  const { data } = await sb.from('profiles').select('id,email,nom').order('nom');
+  if(data) _profiles = data;
+}
+
+function getUserName(id) {
+  if(!id) return null;
+  const p = _profiles.find(x => x.id === id);
+  return p ? (p.nom || p.email.split('@')[0]) : '?';
+}
+
+function getUserInitials(id) {
+  const name = getUserName(id);
+  if(!name || name === '?') return '?';
+  return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+}
+
+function openAssignModal(currentId, onSave) {
+  const doOpen = (profiles) => {
+    let list = [...profiles];
+    if(currentUser && !list.find(x=>x.id===currentUser.id)) {
+      list.unshift({id:currentUser.id, email:currentUser.email, nom:currentUser.user_metadata?.nom||''});
+    }
+    if(!list.length && currentUser) list = [{id:currentUser.id, email:currentUser.email, nom:currentUser.user_metadata?.nom||''}];
+    let html2 = '<div class="mhdr"><div class="mtitle">Assigner à</div><button class="mclose" onclick="closeModal()">×</button></div>';
+    html2 += '<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px">';
+    html2 += '<div class="assign-row" data-uid="" style="'+(currentId===null?'border-color:var(--acc);background:var(--bgh)':'')+'">'
+      + '<div style="width:28px;height:28px;border-radius:50%;background:var(--bgh);border:1px dashed var(--b2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--t3)">—</div>'
+      + '<span style="font-size:12.5px;color:var(--t3)">Non assigné</span></div>';
+    list.forEach(p => {
+      const name = p.nom || (p.email ? p.email.split('@')[0] : '?');
+      const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+      const sel = currentId === p.id;
+      html2 += '<div class="assign-row" data-uid="'+p.id+'" style="'+(sel?'border-color:var(--acc);background:var(--bgh)':'')+'">'
+        + '<div style="width:28px;height:28px;border-radius:50%;background:var(--acc);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+initials+'</div>'
+        + '<div><div style="font-size:12.5px;font-weight:500">'+name+'</div><div style="font-size:10px;color:var(--t3)">'+p.email+'</div></div>'
+        + '</div>';
+    });
+    html2 += '</div>'
+      + '<div style="border-top:1px solid var(--b);padding-top:10px;margin-top:4px">'
+        + '<button class="btn btn-ghost btn-sm" id="btn-add-member" style="width:100%;justify-content:center;border-style:dashed">+ Ajouter un membre manuellement</button>'
+      + '</div>'
+      + '<div id="add-member-form" style="display:none;margin-top:8px">'
+        + '<div style="display:flex;gap:6px">'
+          + '<input class="fi" id="f-member-nom" placeholder="Nom" style="flex:1;font-size:12px;padding:6px 8px">'
+          + '<input class="fi" id="f-member-email" placeholder="courriel@exemple.com" style="flex:1;font-size:12px;padding:6px 8px">'
+          + '<button class="btn btn-w btn-sm" id="btn-member-save" style="white-space:nowrap">Ajouter</button>'
+        + '</div>'
+      + '</div>'
+      + '<div class="mactions"><button class="btn" onclick="closeModal()">Annuler</button></div>';
+    showModal(html2);
+    setTimeout(() => {
+      document.querySelectorAll('.assign-row').forEach(row => {
+        row.addEventListener('click', () => { closeModal(); onSave(row.dataset.uid || null); });
+      });
+      const addBtn = document.getElementById('btn-add-member');
+      const form = document.getElementById('add-member-form');
+      if(addBtn && form) addBtn.addEventListener('click', () => { form.style.display = form.style.display==='none'?'block':'none'; });
+      const saveBtn = document.getElementById('btn-member-save');
+      if(saveBtn) saveBtn.addEventListener('click', async () => {
+        const nom = document.getElementById('f-member-nom').value.trim();
+        const email = document.getElementById('f-member-email').value.trim();
+        if(!nom || !email) { toast('Nom et courriel requis'); return; }
+        const sb2 = getSB();
+        if(sb2) await sb2.from('profiles').upsert({id:'manual-'+Date.now(), email, nom}, {onConflict:'email'}).catch(()=>{});
+        if(!_profiles.find(x=>x.email===email)) _profiles.push({id:'manual-'+Date.now(), email, nom});
+        closeModal();
+        openAssignModal(currentId, onSave);
+      });
+    }, 0);
+  };
+
+  // Open instantly with cache — but if cache is empty, load first (fast, < 500ms)
+  const sb = getSB();
+  if(_profiles.length <= 1 && sb) {
+    sb.from('profiles').select('id,email,nom').order('nom').then(({data}) => {
+      if(data && data.length) _profiles = data;
+      doOpen(_profiles);
+    });
+  } else {
+    doOpen(_profiles);
+    // Refresh in background
+    if(sb) sb.from('profiles').select('id,email,nom').order('nom').then(({data}) => { if(data && data.length) _profiles = data; });
+  }
+}
+function assignCamp(campId) {
+  const c = allCamps().find(x => x.id === campId); if(!c) return;
+  openAssignModal(c.assigneA || null, (uid) => {
+    snapshot(); c.assigneA = uid || null;
+    renderCampagnes();
+    toast(uid ? 'Assigné' : 'Assignation retirée');
+  });
+}
+
+function assignPub(pubId) {
+  const p = publications.find(x => x.id === pubId); if(!p) return;
+  openAssignModal(p.assigneA || null, (uid) => {
+    snapshot(); p.assigneA = uid || null;
+    saveState(); renderPublications();
+    toast(uid ? 'Assigné' : 'Assignation retirée');
+  });
+}
+
+function toggleUserMenu() {
+  const m = document.getElementById('user-menu');
+  if(!m) return;
+  m.style.display = m.style.display === 'none' ? 'block' : 'none';
+  if(m.style.display === 'block') {
+    setTimeout(() => document.addEventListener('click', _closeUserMenuOutside), 0);
+  }
+}
+function closeUserMenu() {
+  const m = document.getElementById('user-menu');
+  if(m) m.style.display = 'none';
+  document.removeEventListener('click', _closeUserMenuOutside);
+}
+function _closeUserMenuOutside(e) {
+  const bar = document.getElementById('user-bar');
+  if(bar && !bar.contains(e.target)) closeUserMenu();
+}
+
+function openProfileSettings() {
+  const nom = currentUser?.user_metadata?.nom || '';
+  const email = currentUser?.email || '';
+  const photoUrl = currentUser?.user_metadata?.photo || '';
+  showModal(
+    '<div class="mhdr"><div class="mtitle">Mon profil</div><button class="mclose" onclick="closeModal()">×</button></div>'
+    + '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:16px">'
+      + '<div id="prof-photo-preview" style="width:64px;height:64px;border-radius:50%;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;overflow:hidden;cursor:pointer" onclick="document.getElementById(\'prof-photo-inp\').click()">'
+        + (photoUrl ? '<img src="'+photoUrl+'" style="width:100%;height:100%;object-fit:cover">' : (nom ? nom.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) : '?'))
+      + '</div>'
+      + '<input type="file" id="prof-photo-inp" accept="image/*" style="display:none">'
+      + '<span style="font-size:10px;color:var(--t3)">Cliquer pour changer la photo</span>'
+    + '</div>'
+    + '<div class="fg"><label class="fl">Nom affiché</label><input class="fi" id="f-prof-nom" value="'+nom+'" placeholder="Prénom Nom" autofocus></div>'
+    + '<div class="fg"><label class="fl">Adresse courriel</label><input class="fi" id="f-prof-email" value="'+email+'" placeholder="courriel@exemple.com"></div>'
+    + '<div id="prof-email-warn" style="display:none;font-size:11px;color:#e67e22;padding:6px 10px;background:rgba(230,126,34,0.1);border-radius:6px;margin-bottom:8px">! Changer votre courriel enverra une confirmation aux deux adresses.</div>'
+    + '<div class="mactions"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn btn-w" id="btn-save-prof">Enregistrer</button></div>'
+  );
+  setTimeout(() => {
+    const emailInp = document.getElementById('f-prof-email');
+    emailInp.addEventListener('input', () => {
+      const warn = document.getElementById('prof-email-warn');
+      if(warn) warn.style.display = emailInp.value.trim() !== email ? 'block' : 'none';
+    });
+    const photoInp = document.getElementById('prof-photo-inp');
+    photoInp.addEventListener('change', () => {
+      const file = photoInp.files[0]; if(!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        // Resize to max 200x200
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 200;
+          const ratio = Math.min(MAX/img.width, MAX/img.height, 1);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * ratio);
+          canvas.height = Math.round(img.height * ratio);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          const resized = canvas.toDataURL('image/jpeg', 0.82);
+          const prev = document.getElementById('prof-photo-preview');
+          if(prev) prev.innerHTML = '<img src="'+resized+'" style="width:100%;height:100%;object-fit:cover">';
+          window._profPhotoData = resized;
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+    document.getElementById('btn-save-prof').onclick = async () => {
+      const newNom = document.getElementById('f-prof-nom').value.trim();
+      const newEmail = document.getElementById('f-prof-email').value.trim();
+      const sb = getSB(); if(!sb) { toast('Connexion Supabase manquante'); return; }
+      const btn = document.getElementById('btn-save-prof');
+      btn.textContent = 'Enregistrement...'; btn.disabled = true;
+      try {
+        // 1. Update auth metadata (nom + photo si dispo)
+        const meta = { ...(currentUser?.user_metadata||{}), nom: newNom || currentUser?.user_metadata?.nom };
+        if(window._profPhotoData) meta.photo = window._profPhotoData;
+        const authUpdate = { data: meta };
+        if(newEmail && newEmail !== email) authUpdate.email = newEmail;
+        const { error: authErr } = await sb.auth.updateUser(authUpdate);
+        if(authErr) throw authErr;
+        // 2. Update profiles table
+        await sb.from('profiles').upsert({
+          id: currentUser.id,
+          email: newEmail || email,
+          nom: meta.nom
+        }, { onConflict: 'id' });
+        // 3. Update local state
+        if(!currentUser.user_metadata) currentUser.user_metadata = {};
+        currentUser.user_metadata.nom = meta.nom;
+        if(window._profPhotoData) currentUser.user_metadata.photo = window._profPhotoData;
+        await loadProfiles();
+        updateUserBar();
+        window._profPhotoData = null;
+        closeModal();
+        toast(newEmail && newEmail !== email ? 'Confirmez le changement dans vos courriels' : 'Profil mis à jour ');
+      } catch(e) {
+        toast('Erreur : ' + (e.message || JSON.stringify(e)));
+        btn.textContent = 'Enregistrer'; btn.disabled = false;
+      }
+    };
+  }, 0);
+}
+
+function openClearData() {
+  showModal(
+    '<div class="mhdr"><div class="mtitle" style="color:#e74c3c">! Effacer les données</div><button class="mclose" onclick="closeModal()">×</button></div>'
+    + '<div style="font-size:12.5px;color:var(--t2);margin-bottom:14px;line-height:1.6">Cette action est <strong>irréversible</strong>. Toutes vos campagnes, publications, partenaires et événements seront supprimés définitivement.</div>'
+    + '<div class="fg"><label class="fl">Tapez <strong>SUPPRIMER</strong> pour confirmer</label><input class="fi" id="f-clear-confirm" placeholder="SUPPRIMER" autocomplete="off"></div>'
+    + '<div class="mactions"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn" id="btn-clear-confirm" style="background:#e74c3c;color:#fff;border-color:#e74c3c;opacity:0.4;pointer-events:none">Supprimer définitivement</button></div>'
+  );
+  setTimeout(() => {
+    const inp = document.getElementById('f-clear-confirm');
+    const btn = document.getElementById('btn-clear-confirm');
+    inp.addEventListener('input', () => {
+      const ok = inp.value === 'SUPPRIMER';
+      btn.style.opacity = ok ? '1' : '0.4';
+      btn.style.pointerEvents = ok ? 'auto' : 'none';
+    });
+    btn.onclick = async () => {
+      const sb = getSB();
+      if(sb) {
+        await sb.from('app_state').delete().eq('id', 'main').catch(()=>{});
+      }
+      localStorage.removeItem('qg_state');
+      localStorage.removeItem('qg_state_backup');
+      closeModal();
+      toast('Données effacées');
+      setTimeout(() => location.reload(), 800);
+    };
+  }, 0);
+}
+
+
+
+
+function pubCellKey(e) {
+  if(e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+}
+function savePubCell(el) {
+  const p = publications.find(x => x.id === el.dataset.pid); if(!p) return;
+  const val = el.textContent.trim();
+  if(p[el.dataset.field] === val) return;
+  snapshot();
+  p[el.dataset.field] = val;
+}
+
+const _fileCache = {};
+
+function cacheFile(key, dataUrl) {
+  try {
+    if(_fileCache[key]) return _fileCache[key];
+    const [meta, b64] = dataUrl.split(',');
+    const mime = meta.match(/:(.*?);/)[1];
+    const bytes = atob(b64);
+    const arr = new Uint8Array(bytes.length);
+    for(let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], {type: mime});
+    _fileCache[key] = URL.createObjectURL(blob);
+    return _fileCache[key];
+  } catch(e) { return null; }
+}
+
+function openFile(did, fi) {
+  const d = deals.find(x=>x.id===did); if(!d) return;
+  const f = (d.fichiers||[])[fi]; if(!f) return;
+  let url = null;
+  // Toujours construire depuis path — f.url peut être corrompu
+  if(f.path) url = 'https://qqxhjchybvscbxxewbkx.supabase.co/storage/v1/object/public/ententes/' + f.path;
+  // Fallback base64
+  else if(f.data) url = cacheFile(did+'_'+fi, f.data);
+  if(url) {
+    const a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  } else {
+    toast('Chemin du fichier introuvable');
+  }
+}
+
+// ── INIT ──
+// Hide app until auth is checked
+document.querySelector('.sidebar').style.display = 'none';
+document.querySelector('.main').style.display = 'none';
+document.querySelector('.sb-item[data-view="home"]').classList.add('active');
+navTo('home');
+
+// Check existing session
+(async () => {
+  const sb = getSB();
+  if(!sb) {
+    // No Supabase - just load from localStorage and show app
+    loadFromLS_fallback();
+    render(currentView);
+    document.querySelector('.sidebar').style.display = '';
+    document.querySelector('.main').style.display = '';
+    return;
+  }
+  const { data: { session } } = await sb.auth.getSession();
+  if(session?.user) {
+    showApp(session.user);
+    loadFromDB().then(loaded => { if(loaded) render(currentView); });
+  } else {
+    showLoginScreen();
+  }
+  // Listen for auth changes
+  sb.auth.onAuthStateChange((event, session) => {
+    if(event === 'SIGNED_IN' && session?.user) showApp(session.user);
+    if(event === 'SIGNED_OUT') showLoginScreen();
+  });
+})();
+</script>
+</body>
+</html>
