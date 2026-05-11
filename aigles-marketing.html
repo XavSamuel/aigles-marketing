@@ -450,7 +450,7 @@ input[type="date"].pi::-webkit-calendar-picker-indicator{opacity:0.4;cursor:poin
       <div><div style="font-weight:600">Profil</div><div style="font-size:10px;color:rgba(255,255,255,0.4)">Nom, photo, adresse courriel</div></div>
     </div>
     <div style="height:1px;background:rgba(255,255,255,0.08);margin:0 10px"></div>
-    <div onclick="doLogout();closeUserMenu()" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;font-size:12px;color:rgba(255,255,255,0.85)" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background=''">
+    <div onclick="forceSyncFromSupabase();closeUserMenu()" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;font-size:12px;color:rgba(255,255,255,0.85)" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background=''"><div><div style="font-weight:600">Synchroniser</div><div style="font-size:10px;color:rgba(255,255,255,0.4)">Recharger depuis le serveur</div></div></div><div style="height:1px;background:rgba(255,255,255,0.08);margin:0 10px"></div><div onclick="doLogout();closeUserMenu()" style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;font-size:12px;color:rgba(255,255,255,0.85)" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background=''">
       <span>Déconnexion</span>
     </div>
     <div style="height:1px;background:rgba(255,255,255,0.08);margin:0 10px"></div>
@@ -3406,6 +3406,24 @@ function showLoginScreen() {
   if(ub) ub.style.display = 'none';
 }
 
+async function forceSyncFromSupabase() {
+  setSyncStatus('loading');
+  try {
+    const res = await sbFetch('/rest/v1/app_state?select=data&key=eq.main');
+    if(!res.ok) { toast('Erreur '+res.status); setSyncStatus('error'); return; }
+    const rows = await res.json();
+    if(rows && rows[0] && rows[0].data) {
+      _localDirty = false;
+      applyStateData(rows[0].data);
+      try { localStorage.setItem('qg_marketing_v1', JSON.stringify(rows[0].data)); } catch(e) {}
+      render(currentView);
+      setSyncStatus('saved');
+      setTimeout(() => setSyncStatus('idle'), 1500);
+      toast('Synchronisé');
+    }
+  } catch(e) { toast('Erreur: ' + e.message); setSyncStatus('error'); }
+}
+
 function showApp(user) {
   currentUser = user;
   loadProfiles();
@@ -3419,6 +3437,24 @@ function showApp(user) {
   // Show user bar
   if(ub) ub.style.display = 'block';
   updateUserBar();
+  // Realtime sync
+  if(_realtimeChannel) try{getSB()?.removeChannel(_realtimeChannel);}catch(e){}
+  const _sb = getSB();
+  if(_sb) {
+    _realtimeChannel = _sb.channel('collab')
+      .on('postgres_changes', {event:'*',schema:'public',table:'app_state',filter:'key=eq.main'},
+        payload => {
+          if(_localDirty) return;
+          if(payload.new && payload.new.data) {
+            applyStateData(payload.new.data);
+            try{localStorage.setItem('qg_marketing_v1',JSON.stringify(payload.new.data));}catch(e){}
+            render(currentView);
+            setSyncStatus('saved');
+            setTimeout(()=>setSyncStatus('idle'),1500);
+          }
+        })
+      .subscribe();
+  }
 }
 
 function updateUserBar() {
