@@ -892,7 +892,8 @@ let matchs = [
 let evenementsBase = []; // {id, nom, date, fin, type, description}
 let calEditMode = false;
 let collapsedGroups = new Set();
-let campVue = "liste"; // "liste" | "gantt"
+let campVue = "liste";
+let _localDirty = false; // "liste" | "gantt"
 let collapsedPlans = new Set();
 let idCtr = 100;
 let calY = 2026, calM = 3;
@@ -3232,6 +3233,7 @@ function applyStateData(d) {
 }
 
 function scheduleSave() {
+  _localDirty = true;
   if(_saveTimer) clearTimeout(_saveTimer);
   _saveTimer = setTimeout(saveToDB, 800);
 }
