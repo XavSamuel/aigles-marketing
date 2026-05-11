@@ -3561,8 +3561,15 @@ async function forceSyncFromSupabase() {
   const sb = getSB(); if(!sb) { toast('Pas de connexion Supabase'); return; }
   setSyncStatus('loading');
   try {
+    // Refresh session first
+    await sb.auth.refreshSession();
     const { data, error } = await sb.from('app_state').select('data').eq('key','main').single();
-    if(error) throw error;
+    if(error) {
+      console.error('Sync error:', error);
+      toast('Erreur: ' + error.message);
+      setSyncStatus('error');
+      return;
+    }
     if(data && data.data) {
       _localDirty = false;
       applyStateData(data.data);
@@ -3571,10 +3578,14 @@ async function forceSyncFromSupabase() {
       setSyncStatus('saved');
       setTimeout(() => setSyncStatus('idle'), 2000);
       toast('Données synchronisées');
+    } else {
+      toast('Aucune donnée sur le serveur');
+      setSyncStatus('idle');
     }
   } catch(e) {
+    console.error('Sync exception:', e);
     setSyncStatus('error');
-    toast('Erreur de synchronisation');
+    toast('Erreur: ' + e.message);
   }
 }
 
