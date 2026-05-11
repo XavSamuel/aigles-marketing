@@ -3133,24 +3133,15 @@ function setSyncStatus(s) {
 }
 
 
-// Direct fetch helper — bypasses Supabase JS client extra headers that cause 520
+// Direct fetch — same pattern as manual test that returned Status 200
 async function sbFetch(path, options) {
   options = options || {};
-  let token = SB_KEY;
-  try {
-    const keys = Object.keys(localStorage).filter(k => k.includes('auth-token') || k.includes('supabase.auth.token') || k.startsWith('sb-'));
-    for(const k of keys) {
-      const val = JSON.parse(localStorage.getItem(k) || '{}');
-      const t = val?.access_token || val?.currentSession?.access_token;
-      if(t) { token = t; break; }
-    }
-  } catch(e) {}
   const isWrite = options.method && options.method !== 'GET';
   const res = await fetch(SB_URL + path, {
     method: options.method || 'GET',
     headers: Object.assign({
       'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + token,
+      'Authorization': 'Bearer ' + SB_KEY
     }, isWrite ? { 'Content-Type': 'application/json', 'Prefer': options.prefer || '' } : {}, options.headers || {}),
     body: options.body || undefined
   });
