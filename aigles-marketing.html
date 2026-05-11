@@ -3136,12 +3136,14 @@ function setSyncStatus(s) {
 // Direct fetch helper — bypasses Supabase JS client extra headers that cause 520
 async function sbFetch(path, options) {
   options = options || {};
-  const sb = getSB();
+  // Read session token directly from localStorage — no network call needed
   let token = SB_KEY;
   try {
-    if(sb) {
-      const { data } = await sb.auth.getSession();
-      if(data && data.session && data.session.access_token) token = data.session.access_token;
+    const keys = Object.keys(localStorage).filter(k => k.includes('auth-token') || k.includes('supabase.auth.token') || k.startsWith('sb-'));
+    for(const k of keys) {
+      const val = JSON.parse(localStorage.getItem(k) || '{}');
+      const t = val?.access_token || val?.currentSession?.access_token;
+      if(t) { token = t; break; }
     }
   } catch(e) {}
   const res = await fetch(SB_URL + path, {
