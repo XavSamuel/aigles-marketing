@@ -1412,10 +1412,9 @@ function renderCampagnes() {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const id = btn.dataset.id;
-      snapshot();
       partenariats = partenariats.filter(x=>x.id!==id);
       placements = placements.filter(x=>x.id!==id);
-      saveState(); renderCampagnes(); toast('Campagne supprimée');
+      scheduleSave(); renderCampagnes(); toast('Campagne supprimée');
     });
   });
   // Delete group
@@ -1430,7 +1429,6 @@ function renderCampagnes() {
         ? 'Supprimer "'+g.label+'" et ses '+items.length+' campagne(s) ?'
         : 'Supprimer le groupe "'+g.label+'" ?';
       if(!confirm(msg)) return;
-      snapshot();
       GROUPS = GROUPS.filter(x => x.id !== gid);
       partenariats = partenariats.filter(c => c._groupId !== gid);
       placements = placements.filter(c => c._groupId !== gid);
@@ -1900,7 +1898,8 @@ function renderCRM(){
   // Delete deal
   el.querySelectorAll('.crm-del-deal').forEach(btn => {
     btn.addEventListener('click', () => {
-      snapshot(); deals = deals.filter(x=>x.id!==btn.dataset.did);
+      deals = deals.filter(x=>x.id!==btn.dataset.did);
+      scheduleSave();
       renderCRM(); toast('Entente supprimée');
     });
   });
@@ -3942,8 +3941,8 @@ function renderPublications() {
   el.querySelectorAll('.pub-del-btn').forEach(function(btn) {
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
-      snapshot(); publications = publications.filter(function(x){ return x.id!==btn.dataset.pid; });
-      renderPublications(); toast('Supprimé');
+      publications = publications.filter(function(x){ return x.id!==btn.dataset.pid; });
+      scheduleSave(); renderPublications(); toast('Supprimé');
     });
   });
 }
@@ -4390,7 +4389,6 @@ navTo('home');
         ? 'Supprimer "'+g.label+'" et ses '+items.length+' campagne(s) ?'
         : 'Supprimer le groupe "'+g.label+'" ?';
       if(!confirm(msg)) return;
-      snapshot();
       GROUPS = GROUPS.filter(x => x.id !== gid);
       partenariats = partenariats.filter(c => c._groupId !== gid);
       placements = placements.filter(c => c._groupId !== gid);
