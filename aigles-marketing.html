@@ -4413,9 +4413,13 @@ function openGererColonnes() {
 
 
 async function loadProfiles() {
-  const sb = getSB(); if(!sb) return;
-  const { data } = await sb.from('profiles').select('id,email,nom').order('nom');
-  if(data) _profiles = data;
+  try {
+    const res = await sbFetch('/rest/v1/profiles?select=id,email,nom&order=nom.asc');
+    if(res.ok) {
+      const data = await res.json();
+      if(data) _profiles = data;
+    }
+  } catch(e) { console.warn('loadProfiles:', e.message); }
 }
 
 function getUserName(id) {
