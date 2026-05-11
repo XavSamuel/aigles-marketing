@@ -3563,9 +3563,20 @@ function showApp(user) {
   if(ls) ls.style.display = 'none';
   if(app) app.style.display = '';
   if(main) main.style.display = '';
-  // Show user bar
   if(ub) ub.style.display = 'block';
   updateUserBar();
+  // Sync with Supabase every 30s to pick up other users' changes
+  if(window._syncInterval) clearInterval(window._syncInterval);
+  window._syncInterval = setInterval(function() {
+    if(_localDirty) return; // don't overwrite pending local changes
+    const sb = getSB(); if(!sb) return;
+    sb.from('app_state').select('data').eq('key','main').single().then(function(res) {
+      if(res.data && res.data.data && !_localDirty) {
+        applyStateData(res.data.data);
+        render(currentView);
+      }
+    });
+  }, 30000);
 }
 
 function updateUserBar() {
@@ -3875,45 +3886,53 @@ function renderPublications() {
     html += '<div style="margin-top:10px">'+makePubAddRow()+'</div>';
 
   } else {
-    // ── LISTE — inline Excel ──
-    const PLAT_LIST = typeof PLATEFORMES !== 'undefined' ? PLATEFORMES : ['Facebook','Instagram','LinkedIn','TikTok','Infolettre','SMS','Twitter/X','Google'];
-    html += '<div style="border:1px solid var(--b);border-radius:10px;overflow:hidden">'
-      + '<table style="width:100%;border-collapse:collapse"><thead>'
-      + '<tr style="background:var(--bgp);border-bottom:1px solid var(--b)">'
-        + '<th style="width:4px;padding:0"></th>'
-        + '<th style="text-align:left;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px">Titre</th>'
-        + '<th style="text-align:left;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 10px;width:120px">Statut</th>'
-        + '<th style="text-align:left;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 10px;width:160px">Plateformes</th>'
-        + '<th style="text-align:left;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 10px;width:120px">Date</th>'
-        + '<th style="width:32px"></th>'
-      + '</tr></thead><tbody>';
-
-    sorted.forEach(function(p) {
+    // ── LISTE — groupée par statut ──
+    const makeRow = function(p) {
       const st = cols.find(function(s){ return s.id===p.statut; }) || cols[0];
       const plats = (p.plateformes||[p.plateforme]).filter(Boolean).join(', ');
-      const dateStr = p.datePubl ? new Date(p.datePubl+'T12:00').toLocaleDateString('fr-CA',{day:'numeric',month:'short',year:'numeric'}) : '';
-      html += '<tr class="pub-inline-row" data-pid="'+p.id+'" style="border-bottom:1px solid var(--b)">'
+      return '<tr class="pub-inline-row" data-pid="'+p.id+'" style="border-bottom:1px solid var(--b)">'
         + '<td style="background:'+st.color+';width:4px;padding:0"></td>'
         + '<td style="padding:6px 12px"><div class="pub-cell-title" contenteditable="true" spellcheck="false" data-pid="'+p.id+'" style="font-size:13px;font-weight:500;outline:none;padding:2px 4px;border-radius:4px;min-width:80px" onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';savePubInline(this,\'titre\')" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}">'+p.titre+'</div></td>'
-        + '<td style="padding:6px 10px"><span class="pub-statut-cell" data-pid="'+p.id+'" data-statut="'+p.statut+'" style="cursor:pointer;font-size:10px;font-weight:600;padding:3px 9px;border-radius:20px;background:'+st.color+'18;color:'+st.color+';border:1px solid '+st.color+'40;white-space:nowrap">'+st.lbl+'</span></td>'
-        + '<td style="padding:6px 10px"><div class="pub-plat-cell" data-pid="'+p.id+'" style="font-size:10.5px;color:var(--t2);cursor:pointer;padding:2px 4px;border-radius:4px" title="Cliquer pour modifier" onclick="openPlatPicker(\''+p.id+'\',this)">'+( plats || '<span style="color:var(--t3)">—</span>')+' <span style="color:var(--t3);font-size:9px">▼</span></div></td>'
+        + '<td style="padding:6px 10px"><div class="pub-plat-cell" data-pid="'+p.id+'" style="font-size:10.5px;color:var(--t2);cursor:pointer;padding:2px 4px;border-radius:4px" onclick="openPlatPicker(\''+p.id+'\',this)">'+(plats||'<span style="color:var(--t3)">—</span>')+' <span style="color:var(--t3);font-size:9px">▼</span></div></td>'
         + '<td style="padding:6px 10px"><input type="date" class="pub-date-cell fi pi" data-pid="'+p.id+'" value="'+(p.datePubl||'')+'" style="border:none;background:transparent;font-size:11px;font-family:var(--font);color:var(--t2);padding:2px 4px;border-radius:4px;cursor:pointer;width:100%" onchange="savePubDate(this)" onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\'"></td>'
-        + '<td style="padding:0 8px"><button class="pub-del-btn" data-pid="'+p.id+'" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:16px;opacity:0.2;padding:0" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.2\'">×</button></td>'
+        + '<td style="padding:0 8px;text-align:right"><button class="pub-del-btn" data-pid="'+p.id+'" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:16px;opacity:0.2;padding:0" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.2\'">×</button></td>'
       + '</tr>';
-    });
+    };
 
-    // Add row
-    html += '<tr id="pub-add-row" style="border-top:1px dashed var(--b)">'
-      + '<td style="width:4px"></td>'
-      + '<td colspan="5" style="padding:8px 12px">'
-        + '<div style="display:flex;align-items:center;gap:8px;color:var(--t3);cursor:pointer;font-size:11.5px" onclick="addPubInlineRow()">'
-          + '<span style="width:16px;height:16px;border-radius:50%;border:1px dashed currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:13px">+</span>'
-          + 'Ajouter une publication'
+    html += '<div style="display:flex;flex-direction:column;gap:12px">';
+    cols.forEach(function(st) {
+      const pubs = sorted.filter(function(p){ return p.statut === st.id; });
+      html += '<div style="border:1px solid var(--b);border-radius:10px;overflow:hidden">'
+        + '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bgp);border-bottom:1px solid var(--b)">'
+          + '<span style="width:8px;height:8px;border-radius:50%;background:'+st.color+';flex-shrink:0"></span>'
+          + '<span style="font-size:11px;font-weight:700;color:var(--t2)">'+st.lbl+'</span>'
+          + '<span style="font-size:10px;color:var(--t3);background:var(--bgh);border:1px solid var(--b);border-radius:10px;padding:0px 7px;margin-left:2px">'+pubs.length+'</span>'
         + '</div>'
-      + '</td>'
-    + '</tr>';
+        + '<table style="width:100%;border-collapse:collapse"><thead>'
+        + '<tr style="background:var(--bgp)">'
+          + '<th style="width:4px;padding:0"></th>'
+          + '<th style="text-align:left;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;padding:6px 12px">Titre</th>'
+          + '<th style="text-align:left;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;padding:6px 10px;width:180px">Plateformes</th>'
+          + '<th style="text-align:left;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;padding:6px 10px;width:120px">Date</th>'
+          + '<th style="width:32px"></th>'
+        + '</tr></thead><tbody>';
 
-    html += '</tbody></table></div>';
+      if(pubs.length === 0) {
+        html += '<tr><td colspan="5" style="padding:10px 14px;color:var(--t3);font-size:11px;font-style:italic;opacity:0.5">Aucune publication</td></tr>';
+      } else {
+        pubs.forEach(function(p){ html += makeRow(p); });
+      }
+
+      // Add row per section
+      html += '<tr><td style="width:4px"></td><td colspan="4" style="padding:6px 12px">'
+        + '<div style="display:flex;align-items:center;gap:7px;color:var(--t3);cursor:pointer;font-size:11px" onclick="addPubInlineRow(\''+st.id+'\')">'
+          + '<span style="width:14px;height:14px;border-radius:50%;border:1px dashed currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:12px">+</span>'
+          + 'Ajouter'
+        + '</div></td></tr>';
+
+      html += '</tbody></table></div>';
+    });
+    html += '</div>';
   }
 
   el.innerHTML = html;
@@ -3956,14 +3975,14 @@ function savePubDate(inp) {
   const p = publications.find(function(x){ return x.id===inp.dataset.pid; }); if(!p) return;
   snapshot(); p.datePubl = inp.value; saveState();
 }
-function addPubInlineRow() {
+function addPubInlineRow(statut) {
   window._pubVue = 'liste';
-  const newP = {id:'pub'+(++idCtr), titre:'Nouvelle publication', plateformes:[], statut:'attente', datePubl:'', message:'', visuel:'', commentaires:[], dateCreation:new Date().toISOString()};
+  const newP = {id:'pub'+(++idCtr), titre:'Nouvelle publication', plateformes:[], statut:statut||'attente', datePubl:'', message:'', visuel:'', commentaires:[], dateCreation:new Date().toISOString()};
   publications.push(newP);
   scheduleSave(); renderPublications();
   setTimeout(function() {
     const rows = document.querySelectorAll('.pub-cell-title');
-    if(rows.length) { rows[rows.length-1].focus(); rows[rows.length-1].select && rows[rows.length-1].select(); }
+    if(rows.length) { rows[rows.length-1].focus(); }
   }, 50);
 }
 function openPlatPicker(pid, anchor) {
