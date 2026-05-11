@@ -1380,13 +1380,12 @@ function renderCampagnes() {
     row.addEventListener('mouseleave',()=>row.style.opacity='0.4');
     row.addEventListener('click', () => {
       const gid = row.dataset.gid;
-      snapshot();
       const newC = {id:'pl'+(++idCtr), nom:'Nouvelle campagne', _groupId: gid,
         budget:0, depense:0, debut:'', fin:'', statut:'planifie',
         canal:'custom', impressions:0, clics:0, segments:[], persona:[], notes:'',
         periodes:[{id:Date.now(), debut:'', fin:'', budget:0}]};
       placements.push(newC);
-      saveState(); renderCampagnes();
+      scheduleSave(); renderCampagnes();
       // Focus name field of new row
       setTimeout(() => {
         const cells = document.querySelectorAll('.camp-cell-edit');
@@ -2039,7 +2038,6 @@ function createGroupInline() {
   const nom = document.getElementById('new-grp-name')?.value.trim();
   const color = document.getElementById('new-grp-color')?.value || '#5b4ef8';
   if(!nom) { document.getElementById('new-grp-name')?.focus(); return; }
-  snapshot();
   const gid = 'g'+(++idCtr);
   GROUPS.push({ id: gid, label: nom, color, filter: c => c.gid === gid });
   saveState(); renderCampagnes(); toast('Groupe créé');
@@ -3960,11 +3958,10 @@ function savePubDate(inp) {
   snapshot(); p.datePubl = inp.value; saveState();
 }
 function addPubInlineRow() {
-  window._pubVue = 'liste'; // ensure list view
-  snapshot();
+  window._pubVue = 'liste';
   const newP = {id:'pub'+(++idCtr), titre:'Nouvelle publication', plateformes:[], statut:'attente', datePubl:'', message:'', visuel:'', commentaires:[], dateCreation:new Date().toISOString()};
   publications.push(newP);
-  saveState(); renderPublications();
+  scheduleSave(); renderPublications();
   setTimeout(function() {
     const rows = document.querySelectorAll('.pub-cell-title');
     if(rows.length) { rows[rows.length-1].focus(); rows[rows.length-1].select && rows[rows.length-1].select(); }
