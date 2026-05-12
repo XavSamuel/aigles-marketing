@@ -1104,36 +1104,110 @@ function renderHomeMiniGantt() {
 // CAMPAGNES
 
 function buildGroupHtml(g, all) {
-  const items=all.filter(g.filter||(() => false));
-  const gtb=items.reduce((s,c)=>s+c.budget,0), gtd=items.reduce((s,c)=>s+c.depense,0);
-  const gact=items.filter(c=>c.statut==='actif').length, gpct=gtb?Math.round(gtd/gtb*100):0;
-  const open=!collapsedGroups.has(g.id), topR=open?'var(--rl) var(--rl) 0 0':'var(--rl)';
-  let h='<div class="grp-wrap"><div class="grp-hdr" data-gid="'+g.id+'" style="border-radius:'+topR+'">'
-    +'<span class="grp-arrow'+(open?' open':'')+'">&#9654;</span>'
-    +'<span class="grp-dot" style="background:'+g.color+'"></span>'
-    +'<span class="grp-name">'+g.label+'</span>'
-    +(gact>0?'<span style="font-size:9.5px;color:var(--green);background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);border-radius:10px;padding:1px 6px;flex-shrink:0">'+gact+' actif'+(gact>1?'s':'')+'</span>':'')
-    +'<div class="grp-stats" style="margin-left:auto"><div class="grp-stats-val">'+fmtM(gtb)+'</div><div class="grp-stats-sub">'+fmtM(gtd)+' dep. ('+gpct+'%)</div></div>'
-    +'<button class="grp-del-btn" data-gid="'+g.id+'" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:18px;padding:0 8px;line-height:1;margin-left:6px">×</button>'+'</div>';
+  const items = all.filter(c => c._groupId===g.id || c._gid===g.id || c.gid===g.id);
+  const gtb = items.reduce((s,c)=>s+(c.budget||0),0);
+  const gtd = items.reduce((s,c)=>s+(c.depense||0),0);
+  const gact = items.filter(c=>c.statut==='actif').length;
+  const gpct = gtb ? Math.round(gtd/gtb*100) : 0;
+  const open = !collapsedGroups.has(g.id);
+  const topR = open ? 'var(--rl) var(--rl) 0 0' : 'var(--rl)';
+  const SLIST = [{id:'planifie',lbl:'Planifié',c:'#d97706'},{id:'actif',lbl:'Actif',c:'#16a34a'},{id:'pause',lbl:'En pause',c:'#6b7280'},{id:'termine',lbl:'Terminé',c:'#5b4ef8'}];
+  const linkedDeal = g.dealId ? deals.find(d=>d.id===g.dealId) : null;
+  const dealProducts = linkedDeal ? (linkedDeal.recu||[]).filter(r=>r.detail||r.type) : [];
+  const hasProd = dealProducts.length > 0;
+
+  let hh = '<div class="grp-wrap">'
+    + '<div class="grp-hdr" data-gid="'+g.id+'" style="border-radius:'+topR+'">'
+      + '<span class="grp-arrow'+(open?' open':'')+'">&#9654;</span>'
+      + '<span class="grp-dot" style="background:'+g.color+'"></span>'
+      + '<span class="grp-name">'+g.label+'</span>'
+      + (linkedDeal
+          ? '<span style="font-size:9.5px;background:#e0e7ff;color:#4338ca;border:1px solid #c7d2fe;border-radius:10px;padding:1px 8px;flex-shrink:0;cursor:pointer" class="grp-deal-badge" data-gid="'+g.id+'" title="Changer l\'entente liée">'+(linkedDeal.entreprise||linkedDeal.partenaire||'?')+' ↗</span>'
+          : '<span style="font-size:9.5px;color:var(--t3);border:1px dashed var(--b);border-radius:10px;padding:1px 8px;flex-shrink:0;cursor:pointer" class="grp-deal-badge" data-gid="'+g.id+'" title="Lier à une entente CRM">+ Lier entente</span>')
+      + (gact>0 ? '<span style="font-size:9.5px;color:var(--green);background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);border-radius:10px;padding:1px 6px;flex-shrink:0">'+gact+' actif'+(gact>1?'s':'')+'</span>' : '')
+      + '<div class="grp-stats" style="margin-left:auto"><div class="grp-stats-val">'+fmtM(gtb)+'</div><div class="grp-stats-sub">'+fmtM(gtd)+' dep. ('+gpct+'%)</div></div>'
+      + '<button class="grp-del-btn" data-gid="'+g.id+'" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:18px;padding:0 8px;line-height:1;margin-left:6px">×</button>'
+    + '</div>';
+
   if(open) {
-    h+='<div class="grp-body"><table><thead><tr><th>Campagne</th><th>Budget</th><th>Dépensé</th><th>Progression</th><th>Période</th><th>Statut</th><th></th></tr></thead><tbody>'
-      +(items.length===0?'<tr><td colspan="7" style="color:var(--t3);font-size:11.5px;text-align:center;padding:14px;font-style:italic">Aucune campagne</td></tr>':'')
-      +items.map(c=>{const p=c.budget?Math.round(c.depense/c.budget*100):0;
-        return '<tr data-id="'+c.id+'"><td><div style="font-weight:500">'+c.nom+'</div><div style="font-size:9.5px;color:var(--t3)">'+(c.marche||'')+'</div></td>'
-          +'<td>'+fmtM(c.budget)+'</td><td>'+fmtM(c.depense)+'</td>'
-          +'<td><div style="display:flex;align-items:center;gap:5px"><div class="prog"><div class="prog-f" style="background:'+g.color+'"></div></div><span style="font-size:9.5px;color:var(--t2)">'+p+'%</span></div></td>'
-          +'<td style="font-size:10.5px;color:var(--t2)">'+fmtD(c.debut)+' → '+fmtD(c.fin)+'</td>'
-          +'<td>'+badge(c.statut)+'</td>'
-          +'<td style="white-space:nowrap">'
-          +'<button class="btn btn-sm edit-btn" data-id="'+c.id+'">Modifier</button>'
-          +'<button class="btn btn-ghost btn-sm dup-btn" data-id="'+c.id+'" title="Dupliquer" style="margin-left:3px">Dupliquer</button>'
-          +'</td></tr>';}).join('')
-      +'<tr class="new-camp-row" data-gid="'+g.id+'"><td colspan="7"><div style="display:flex;align-items:center;gap:7px;color:var(--t3);font-size:11.5px">'
-        +'<span style="width:16px;height:16px;border-radius:50%;border:1px dashed var(--t3);display:inline-flex;align-items:center;justify-content:center;font-size:12px;line-height:1">+</span>'
-        +'Créer une nouvelle campagne</div></td></tr>'
-      +'</tbody></table></div>';
+    hh += '<div class="grp-body"><table style="width:100%"><thead><tr>'
+      + '<th style="width:22%">Campagne</th>'
+      + '<th style="width:80px">Budget total</th>'
+      + '<th style="width:75px">Budget/jour</th>'
+      + '<th style="width:75px">Dépensé</th>'
+      + '<th style="min-width:70px">Progression</th>'
+      + '<th style="width:180px">Période</th>'
+      + (hasProd ? '<th style="width:140px">Produit CRM</th><th style="width:70px">Qté</th>' : '')
+      + '<th style="width:100px">Statut</th>'
+      + '<th style="width:40px"></th>'
+    + '</tr></thead><tbody>';
+
+    if(!items.length) hh += '<tr><td colspan="'+(hasProd?10:8)+'" style="color:var(--t3);font-size:11px;text-align:center;padding:12px;opacity:0.5">Aucune campagne — cliquer ci-dessous pour en créer une</td></tr>';
+
+    items.forEach(c => {
+      const p = c.budget ? Math.round((c.depense||0)/c.budget*100) : 0;
+      const st = SLIST.find(s=>s.id===c.statut)||SLIST[0];
+      const days = (c.debut&&c.fin) ? Math.max(1,Math.round((new Date(c.fin+'T12:00')-new Date(c.debut+'T12:00'))/86400000)+1) : 0;
+      const jourVal = (c.budget&&days) ? (c.budget/days).toFixed(2) : '';
+      const debutFmt = c.debut ? new Date(c.debut+'T12:00').toLocaleDateString('fr-CA',{day:'numeric',month:'short'}) : '—';
+      const finFmt = c.fin ? new Date(c.fin+'T12:00').toLocaleDateString('fr-CA',{day:'numeric',month:'short'}) : '—';
+
+      hh += '<tr class="camp-row" data-id="'+c.id+'">'
+        + '<td><div class="camp-cell-edit" contenteditable="true" spellcheck="false" data-id="'+c.id+'" data-f="nom"'
+          + ' style="font-weight:500;padding:2px 4px;border-radius:4px;outline:none"'
+          + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';saveCampCell(this)"'
+          + ' onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}">'+c.nom+'</div></td>'
+        + '<td><div style="display:flex;align-items:center;gap:2px"><span style="font-size:10px;color:var(--t3)">$</span>'
+          + '<input type="number" class="camp-num-inp" data-id="'+c.id+'" data-f="budget" value="'+(c.budget||0)+'" min="0"'
+          + ' style="width:62px;border:none;background:transparent;font-size:12px;font-family:var(--font);color:var(--t);padding:2px 4px;border-radius:4px"'
+          + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';saveCampNum(this)"'
+          + ' oninput="campRowCalcJour(this)"></div></td>'
+        + '<td><div style="display:flex;align-items:center;gap:2px"><span style="font-size:10px;color:var(--t3)">$</span>'
+          + '<input type="number" class="camp-num-jour" data-id="'+c.id+'" value="'+jourVal+'" min="0" placeholder="—"'
+          + ' style="width:55px;border:none;background:transparent;font-size:12px;font-family:var(--font);color:var(--t2);padding:2px 4px;border-radius:4px"'
+          + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';campRowCalcTotal(this)"></div></td>'
+        + '<td><div style="display:flex;align-items:center;gap:2px"><span style="font-size:10px;color:var(--t3)">$</span>'
+          + '<input type="number" class="camp-num-inp" data-id="'+c.id+'" data-f="depense" value="'+(c.depense||0)+'" min="0"'
+          + ' style="width:52px;border:none;background:transparent;font-size:12px;font-family:var(--font);color:var(--t);padding:2px 4px;border-radius:4px"'
+          + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';saveCampNum(this)"></div></td>'
+        + '<td><div style="display:flex;align-items:center;gap:5px"><div class="prog"><div class="prog-f" style="width:'+p+'%;background:'+g.color+'"></div></div><span style="font-size:9.5px;color:var(--t2)">'+p+'%</span></div></td>'
+        + '<td style="white-space:nowrap">'
+          + '<input type="date" class="camp-date-inp" data-id="'+c.id+'" data-f="debut" value="'+(c.debut||'')+'"'
+            + ' style="border:none;background:transparent;font-size:11px;font-family:var(--font);color:var(--t2);padding:2px 3px;border-radius:4px;width:100px;cursor:pointer"'
+            + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';saveCampDate(this)">'
+          + '<span style="color:var(--t3);margin:0 2px">→</span>'
+          + '<input type="date" class="camp-date-inp" data-id="'+c.id+'" data-f="fin" value="'+(c.fin||'')+'"'
+            + ' style="border:none;background:transparent;font-size:11px;font-family:var(--font);color:var(--t2);padding:2px 3px;border-radius:4px;width:100px;cursor:pointer"'
+            + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';saveCampDate(this)">'
+          + (days ? '<span style="font-size:9px;color:var(--t3);margin-left:3px">'+days+'j</span>' : '')
+        + '</td>'
+        + (hasProd
+          ? '<td><select class="camp-prod-sel" data-id="'+c.id+'" style="font-size:10.5px;border:1px solid var(--b);border-radius:6px;padding:2px 5px;background:var(--bgp);max-width:130px">'
+              + '<option value="">— produit</option>'
+              + dealProducts.map(r=>'<option value="'+r.id+'"'+(c.dealProductId===r.id?' selected':'')+'>'+(r.detail||r.type||'?')+'</option>').join('')
+            + '</select></td>'
+          + '<td><input type="number" class="camp-prod-qty" data-id="'+c.id+'" value="'+(c.dealProductQty||'')+'" min="0" placeholder="0"'
+              + ' style="width:55px;border:1px solid var(--b);background:var(--bgp);font-size:11px;font-family:var(--font);padding:2px 5px;border-radius:6px" title="Qté utilisée"></td>'
+          : '')
+        + '<td><span class="camp-statut-btn" data-id="'+c.id+'" data-statut="'+c.statut+'"'
+          + ' style="cursor:pointer;font-size:10px;font-weight:600;padding:3px 9px;border-radius:20px;background:'+st.c+'18;color:'+st.c+';border:1px solid '+st.c+'40;white-space:nowrap">'+st.lbl+'</span></td>'
+        + '<td style="text-align:right;padding-right:6px"><button class="camp-del-btn" data-id="'+c.id+'"'
+          + ' style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:16px;padding:2px 4px;opacity:0.3;line-height:1"'
+          + ' onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.3\'">×</button></td>'
+      + '</tr>';
+    });
+
+    hh += '<tr class="new-camp-row" data-gid="'+g.id+'">'
+      + '<td colspan="'+(hasProd?10:8)+'" style="padding:8px 12px">'
+        + '<div style="display:flex;align-items:center;gap:7px;color:var(--t3);font-size:11.5px;cursor:pointer">'
+          + '<span style="width:16px;height:16px;border-radius:50%;border:1px dashed var(--t3);display:inline-flex;align-items:center;justify-content:center;font-size:13px">+</span>'
+          + 'Créer une nouvelle campagne'
+        + '</div>'
+      + '</td>'
+    + '</tr>';
+    hh += '</tbody></table></div>';
   }
-  return h+'</div>';
+  return hh + '</div>';
 }
 
 function renderCampagnes() {
