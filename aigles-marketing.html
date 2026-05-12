@@ -3738,43 +3738,42 @@ function renderPublications() {
     html += '<div style="margin-top:10px">'+makePubAddRow()+'</div>';
 
   } else {
-    if(!sorted.length) {
-      html += '<div style="text-align:center;padding:40px;color:var(--t3);font-size:13px">Aucune publication — <span style="color:var(--acc);cursor:pointer" onclick="openAddPublication()">en créer une</span></div>';
-    } else {
-      html += '<div style="border:1px solid var(--b);border-radius:10px;overflow:hidden">';
-      sorted.forEach(function(p, i) {
-        const st = cols.find(function(s){ return s.id===p.statut; }) || cols[0];
-        const plats = (p.plateformes||[p.plateforme]).filter(Boolean);
-        const assignName = p.assigneA ? getUserInitials(p.assigneA) : null;
-        const isLast = i === sorted.length - 1;
-        html += '<div class="pub-list-row" data-pid="'+p.id+'" style="display:grid;grid-template-columns:4px 1fr auto auto auto;align-items:center;gap:0;'+(isLast?'':'border-bottom:1px solid var(--b)')+';background:#fff;transition:background 0.08s" onmouseover="this.style.background=\'#fafafe\'" onmouseout="this.style.background=\'#fff\'">'
-          + '<div style="background:'+st.color+';height:100%;min-height:52px"></div>'
-          + '<div style="padding:10px 14px;cursor:pointer;min-width:0" onclick="openEditPublication(\''+p.id+'\')">'
-            + '<div style="font-size:13px;font-weight:600;color:var(--t);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.titre+'</div>'
-            + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
-              + '<span style="font-size:10px;font-weight:600;color:'+st.color+';background:'+st.color+'18;padding:1px 8px;border-radius:20px">'+st.lbl+'</span>'
-              + plats.map(function(pl){ return '<span style="font-size:10px;color:var(--t3);background:var(--bgh);padding:1px 7px;border-radius:20px;border:1px solid var(--b)">'+pl+'</span>'; }).join('')
-              + (p.datePubl ? '<span style="font-size:10px;color:var(--t3)">'+fmtD(p.datePubl)+'</span>' : '')
-            + '</div>'
-          + '</div>'
-          + '<div style="padding:0 10px">'
-            + (assignName
-                ? '<div style="width:26px;height:26px;border-radius:50%;background:var(--acc);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="assignPub(\''+p.id+'\')" title="Réassigner">'+assignName+'</div>'
-                : '<div style="width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--b2);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--t3);font-size:14px" onclick="assignPub(\''+p.id+'\')" title="Assigner">+</div>')
-          + '</div>'
-          + '<div style="padding:0 8px">'
-            + ((p.commentaires||[]).length
-                ? '<button class="btn btn-ghost btn-sm" onclick="openCommentModal(\''+p.id+'\')" style="font-size:10px;color:var(--t3)">'+p.commentaires.length+' comm.</button>'
-                : '<button class="btn btn-ghost btn-sm" onclick="openCommentModal(\''+p.id+'\')" style="font-size:10px;color:var(--t3);opacity:0.4">Commenter</button>')
-          + '</div>'
-          + '<div style="padding:0 12px 0 4px"><button class="pub-del-btn" data-pid="'+p.id+'" style="opacity:0.25;transition:opacity 0.1s" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.25\'">×</button></div>'
-        + '</div>';
-      });
-      html += '</div>';
-    }
-    html += '<div style="margin-top:10px">'+makePubAddRow()+'</div>';
+    // ── LISTE groupée par statut ──
+    const makeRow = function(p) {
+      const st = cols.find(function(s){ return s.id===p.statut; }) || cols[0];
+      const plats = (p.plateformes||[]).filter(Boolean).join(', ');
+      return '<tr data-pid="'+p.id+'" style="border-bottom:1px solid var(--b)">'
+        + '<td style="background:'+st.color+';width:4px;padding:0"></td>'
+        + '<td style="padding:6px 12px"><div class="pub-cell-title" contenteditable="true" spellcheck="false" data-pid="'+p.id+'" style="font-size:13px;font-weight:500;outline:none;padding:2px 4px;border-radius:4px" onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';savePubInline(this,\'titre\')" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}">'+p.titre+'</div></td>'
+        + '<td style="padding:6px 10px"><div class="pub-plat-cell" data-pid="'+p.id+'" style="font-size:10.5px;color:var(--t2);cursor:pointer;padding:2px 4px;border-radius:4px" onclick="openPlatPicker(\''+p.id+'\',this)">'+(plats||'<span style=\"color:var(--t3)\">—</span>')+' <span style="color:var(--t3);font-size:9px">▼</span></div></td>'
+        + '<td style="padding:6px 10px"><input type="date" data-pid="'+p.id+'" value="'+(p.datePubl||'')+'" style="border:1px solid var(--b);background:var(--bgp);font-size:11px;font-family:var(--font);color:var(--t2);padding:3px 6px;border-radius:6px;cursor:pointer;width:130px" onchange="savePubDate(this)" onclick="if(this.showPicker)this.showPicker()"></td>'
+        + '<td style="padding:0 8px;text-align:right"><button class="pub-del-btn" data-pid="'+p.id+'" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:16px;opacity:0.2;padding:0" onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.2\'">×</button></td>'
+      + '</tr>';
+    };
+    html += '<div style="display:flex;flex-direction:column;gap:12px">';
+    cols.forEach(function(st) {
+      const pubs = sorted.filter(function(p){ return p.statut === st.id; });
+      html += '<div style="border:1px solid var(--b);border-radius:10px;overflow:hidden">'
+        + '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bgp);border-bottom:1px solid var(--b)">'
+          + '<span style="width:8px;height:8px;border-radius:50%;background:'+st.color+'"></span>'
+          + '<span style="font-size:11px;font-weight:700;color:var(--t2)">'+st.lbl+'</span>'
+          + '<span style="font-size:10px;color:var(--t3);background:var(--bgh);border:1px solid var(--b);border-radius:10px;padding:0 7px;margin-left:2px">'+pubs.length+'</span>'
+        + '</div>'
+        + '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--bgp)">'
+          + '<th style="width:4px;padding:0"></th>'
+          + '<th style="text-align:left;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;padding:6px 12px">Titre</th>'
+          + '<th style="text-align:left;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;padding:6px 10px;width:180px">Plateformes</th>'
+          + '<th style="text-align:left;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;padding:6px 10px;width:140px">Date</th>'
+          + '<th style="width:32px"></th>'
+        + '</tr></thead><tbody>';
+      if(!pubs.length) html += '<tr><td colspan="5" style="padding:10px 14px;color:var(--t3);font-size:11px;font-style:italic;opacity:0.5">Aucune publication</td></tr>';
+      pubs.forEach(function(p){ html += makeRow(p); });
+      html += '<tr><td></td><td colspan="4" style="padding:6px 12px">'
+        + '<div style="display:flex;align-items:center;gap:7px;color:var(--t3);cursor:pointer;font-size:11px" onclick="addPubInlineRow(\''+st.id+'\')">+ Ajouter</div></td></tr>'
+        + '</tbody></table></div>';
+    });
+    html += '</div>';
   }
-
   el.innerHTML = html;
 
   el.querySelectorAll('.pub-cal-item').forEach(function(div) {
