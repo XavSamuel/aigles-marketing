@@ -1061,7 +1061,7 @@ function renderHome() {
   $('wg-crm').innerHTML = '<div>' + (deals.length ? deals.map(d => {
     const done=d.occurrences.filter(o=>o.fait).length, tot=d.occurrences.length;
     const p=tot?Math.round(done/tot*100):0;
-    return '<div class="mdeal"><div style="flex:1;min-width:0"><div class="mdeal-name">'+d.partenaire+'</div><div style="font-size:9.5px;color:var(--t3)">'+d.type+'</div><div class="mbar" style="margin-top:4px"><div class="mbar-f" style="width:'+p+'%"></div></div></div><div style="font-size:11px;color:var(--t2);text-align:right;flex-shrink:0">'+fmtM(d.valeur)+'<div style="font-size:9.5px;color:var(--t3)">'+done+'/'+tot+'</div></div></div>';
+    return '<div class="mdeal"><div style="flex:1;min-width:0"><div class="mdeal-name">'+(d.entreprise||d.partenaire||'')+'</div><div style="font-size:9.5px;color:var(--t3)">'+d.type+'</div><div class="mbar" style="margin-top:4px"><div class="mbar-f" style="width:'+p+'%"></div></div></div><div style="font-size:11px;color:var(--t2);text-align:right;flex-shrink:0">'+fmtM(d.valeur)+'<div style="font-size:9.5px;color:var(--t3)">'+done+'/'+tot+'</div></div></div>';
   }).join('') : '<div style="padding:14px;text-align:center;font-size:11.5px;color:var(--t3)">Aucune entente</div>') + '</div>';
 }
 function renderHomeCal() {
