@@ -1199,6 +1199,9 @@ function renderCampagnes() {
     +'<div id="add-group-form" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">'
       +'<input class="fi" id="new-grp-name" placeholder="Nom du groupe (ex: Meta, Radio, OOH...)" style="flex:1;min-width:200px">'
       +'<input type="color" id="new-grp-color" value="#5b4ef8" style="width:32px;height:32px;border:1px solid var(--b);border-radius:6px;padding:2px;cursor:pointer">'
+      +'<select class="fs" id="new-grp-deal" style="font-size:11px;padding:4px 8px"><option value="">Entente CRM (optionnel)</option>'
+        +deals.map(function(d){return '<option value="'+d.id+'">'+(d.entreprise||d.partenaire||'?')+'</option>';}).join('')
+      +'</select>'
       +'<button class="btn btn-w btn-sm" onclick="createGroupInline()" style="padding:5px 14px">Créer</button>'
       +'<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'add-group-form\').style.display=\'none\';document.getElementById(\'add-group-btn-row\').style.display=\'flex\'" style="padding:5px 10px">Annuler</button>'
     +'</div>'
@@ -1567,6 +1570,15 @@ function renderCRM(){
 
     // ── REÇU TABLE ──
     let recuRows = recu.map(r => {
+      // Compute used qty from campaigns linked to this deal+product
+      const usedQty = allCamps().reduce((sum, c) => {
+        const grp = GROUPS.find(g => g.id === (c._groupId||c._gid||c.gid));
+        if(grp && grp.dealId === d.id && c.dealProductId === r.id) return sum + (c.dealProductQty||0);
+        return sum;
+      }, 0);
+      const totalQty = parseFloat(r.quantite)||0;
+      const restant = totalQty - usedQty;
+      const restantColor = restant < 0 ? '#dc2626' : restant === 0 ? '#16a34a' : 'var(--t2)';
       let details = '';
       if(r.type === 'radio') {
         details = '<select class="crm-inline-select" data-did="'+d.id+'" data-rid="'+r.id+'" data-f="sousType" style="width:72px">'
@@ -1587,6 +1599,7 @@ function renderCRM(){
         + '<td style="white-space:normal;word-break:break-word">'+details+'</td>'
         + '<td style="width:80px"><input type="number" class="crm-inline-input" data-did="'+d.id+'" data-rid="'+r.id+'" data-f="quantite" value="'+(r.quantite||'')+'" placeholder="0" min="0" style="width:78px;text-align:right"></td>'
         + '<td style="width:100px"><input type="number" class="crm-inline-input" data-did="'+d.id+'" data-rid="'+r.id+'" data-f="prix" value="'+(r.prix||'')+'" placeholder="0.00" min="0" step="0.01" style="width:96px;text-align:right"></td>'
+        + '<td style="width:70px;text-align:right;font-size:11px;font-weight:600;color:'+restantColor+'">'+( totalQty > 0 ? restant : '—')+'</td>'
         + '<td style="white-space:nowrap;width:44px">'
           + '<button class="crm-action-btn crm-dup-btn" data-did="'+d.id+'" data-rid="'+r.id+'" data-src="recu" title="Dupliquer">⎘</button>'
           + '<button class="crm-del-btn" data-did="'+d.id+'" data-rid="'+r.id+'" data-src="recu">×</button>'
@@ -1643,6 +1656,7 @@ function renderCRM(){
             + '<th style="width:95px">Type</th><th>Détails</th>'
             + '<th style="width:80px;text-align:right">Qté / Impr.</th>'
             + '<th style="width:100px;text-align:right">Prix ($)</th>'
+            + '<th style="width:70px;text-align:right">Restant</th>'
             + '<th style="width:44px"></th>'
           + '</tr></thead>'
           + '<tbody class="recu-body" data-did="'+d.id+'">'+recuRows+'</tbody></table>'
@@ -1886,11 +1900,11 @@ function saveNewDeal(){
 function createGroupInline() {
   const nom = document.getElementById('new-grp-name')?.value.trim();
   const color = document.getElementById('new-grp-color')?.value || '#5b4ef8';
+  const dealId = document.getElementById('new-grp-deal')?.value || '';
   if(!nom) { document.getElementById('new-grp-name')?.focus(); return; }
-  snapshot();
   const gid = 'g'+(++idCtr);
-  GROUPS.push({ id: gid, label: nom, color, filter: c => c.gid === gid });
-  saveState(); renderCampagnes(); toast('Groupe créé');
+  GROUPS.push({ id: gid, label: nom, color, dealId, filter: c => c._groupId === gid || c._gid === gid || c.gid === gid });
+  scheduleSave(); renderCampagnes(); toast('Groupe créé');
 }
 
 function openAddGroup(){
