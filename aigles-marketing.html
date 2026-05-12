@@ -3803,6 +3803,59 @@ function renderPublications() {
     });
   });
 }
+// ── Publications inline list helpers ──
+function savePubInline(el, field) {
+  const p = publications.find(function(x){ return x.id===el.dataset.pid; }); if(!p) return;
+  const val = el.textContent.trim(); if(p[field] === val) return;
+  p[field] = val; scheduleSave();
+}
+function savePubDate(inp) {
+  const p = publications.find(function(x){ return x.id===inp.dataset.pid; }); if(!p) return;
+  p.datePubl = inp.value; scheduleSave();
+}
+function addPubInlineRow(statut) {
+  window._pubVue = 'liste';
+  const newP = {id:'pub'+(++idCtr), titre:'Nouvelle publication', plateformes:[], statut:statut||'attente', datePubl:'', message:'', visuel:'', commentaires:[], dateCreation:new Date().toISOString()};
+  publications.push(newP);
+  scheduleSave(); renderPublications();
+  setTimeout(function() {
+    const rows = document.querySelectorAll('.pub-cell-title');
+    if(rows.length) rows[rows.length-1].focus();
+  }, 50);
+}
+function openPlatPicker(pid, anchor) {
+  document.querySelectorAll('.plat-picker-popup').forEach(function(el){ el.remove(); });
+  const p = publications.find(function(x){ return x.id===pid; }); if(!p) return;
+  const PLATS = ['Facebook','Instagram','LinkedIn','TikTok','Infolettre','SMS','Twitter/X','Google'];
+  const sel = p.plateformes || [];
+  const popup = document.createElement('div');
+  popup.className = 'plat-picker-popup';
+  popup.style.cssText = 'position:fixed;z-index:500;background:var(--bg2);border:1px solid var(--b);border-radius:10px;padding:8px;display:flex;flex-wrap:wrap;gap:5px;width:240px;box-shadow:0 8px 24px rgba(0,0,0,0.15)';
+  const rect = anchor.getBoundingClientRect();
+  popup.style.top = (rect.bottom+4)+'px'; popup.style.left = rect.left+'px';
+  PLATS.forEach(function(pl) {
+    const btn = document.createElement('div');
+    const active = sel.includes(pl);
+    btn.style.cssText = 'padding:4px 10px;border-radius:20px;cursor:pointer;font-size:11px;font-weight:500;border:1.5px solid '+(active?'var(--acc)':'var(--b)')+';background:'+(active?'var(--acc)':'transparent')+';color:'+(active?'#fff':'var(--t2)');
+    btn.textContent = pl;
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if(!p.plateformes) p.plateformes = [];
+      const idx = p.plateformes.indexOf(pl);
+      if(idx > -1) p.plateformes.splice(idx,1); else p.plateformes.push(pl);
+      scheduleSave();
+      anchor.innerHTML = (p.plateformes.join(', ') || '<span style="color:var(--t3)">—</span>') + ' <span style="color:var(--t3);font-size:9px">▼</span>';
+      btn.style.background = p.plateformes.includes(pl) ? 'var(--acc)' : 'transparent';
+      btn.style.borderColor = p.plateformes.includes(pl) ? 'var(--acc)' : 'var(--b)';
+      btn.style.color = p.plateformes.includes(pl) ? '#fff' : 'var(--t2)';
+    });
+    popup.appendChild(btn);
+  });
+  document.body.appendChild(popup);
+  const close = function(e) { if(!popup.contains(e.target) && e.target!==anchor) { popup.remove(); document.removeEventListener('click', close); } };
+  setTimeout(function(){ document.addEventListener('click', close); }, 0);
+}
+
 // Kanban drag and drop
 let _dragPubId = null;
 function pubDragStart(e, id) {
