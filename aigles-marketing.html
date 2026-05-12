@@ -3724,7 +3724,7 @@ function renderPublications() {
       const dayMatch = matchs.find(function(m){ return m.date===ds && m.domicile; });
       const mc = dayMatch ? (MCOLORS[dayMatch.couleur]||MCOLORS.jaune) : null;
       const borderStyle = mc ? 'border-left:3px solid '+mc.brd+';' : '';
-      html += '<div style="background:#fff;min-height:90px;padding:6px;border-right:'+(isLastCol?'none':'1px solid var(--b)')+';border-bottom:1px solid var(--b);'+borderStyle+'">';
+      html += '<div class="pub-cal-day" data-ds="'+ds+'" style="background:#fff;min-height:90px;padding:6px;border-right:'+(isLastCol?'none':'1px solid var(--b)')+';border-bottom:1px solid var(--b);'+borderStyle+';cursor:pointer" title="Ajouter une publication">';
       html += '<div style="font-size:11px;font-weight:700;margin-bottom:4px;'+(isT?'display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#fff;font-size:10px':'color:var(--t3)')+'">'+dd+'</div>';
       pubs.forEach(function(p) {
         const st = cols.find(function(s){ return s.id===p.statut; })||cols[0];
@@ -3778,7 +3778,21 @@ function renderPublications() {
   el.innerHTML = html;
 
   el.querySelectorAll('.pub-cal-item').forEach(function(div) {
-    div.addEventListener('click', function() { openEditPublication(div.dataset.pid); });
+    div.addEventListener('click', function(e) { e.stopPropagation(); openEditPublication(div.dataset.pid); });
+  });
+  el.querySelectorAll('.pub-cal-day').forEach(function(cell) {
+    cell.addEventListener('click', function() {
+      const ds = cell.dataset.ds;
+      const newP = {id:'pub'+(++idCtr), titre:'Nouvelle publication', plateformes:[], statut:'attente', datePubl:ds, message:'', visuel:'', commentaires:[], dateCreation:new Date().toISOString()};
+      publications.push(newP);
+      scheduleSave();
+      window._pubVue = 'liste';
+      renderPublications();
+      setTimeout(function() {
+        const rows = document.querySelectorAll('.pub-cell-title');
+        if(rows.length) rows[rows.length-1].focus();
+      }, 50);
+    });
   });
 
   el.querySelectorAll('.pub-del-btn').forEach(function(btn) {
