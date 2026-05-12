@@ -3721,7 +3721,10 @@ function renderPublications() {
       const isT = today.getFullYear()===cy && today.getMonth()===cm && today.getDate()===dd;
       const pubs = byDate[ds]||[];
       const isLastCol = (firstDay+dd-1)%7 === 6;
-      html += '<div style="background:#fff;min-height:90px;padding:6px;border-right:'+(isLastCol?'none':'1px solid var(--b)')+';border-bottom:1px solid var(--b)">';
+      const dayMatch = matchs.find(function(m){ return m.date===ds && m.domicile; });
+      const mc = dayMatch ? (MCOLORS[dayMatch.couleur]||MCOLORS.jaune) : null;
+      const borderStyle = mc ? 'border-left:3px solid '+mc.brd+';' : '';
+      html += '<div style="background:#fff;min-height:90px;padding:6px;border-right:'+(isLastCol?'none':'1px solid var(--b)')+';border-bottom:1px solid var(--b);'+borderStyle+'">';
       html += '<div style="font-size:11px;font-weight:700;margin-bottom:4px;'+(isT?'display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#fff;font-size:10px':'color:var(--t3)')+'">'+dd+'</div>';
       pubs.forEach(function(p) {
         const st = cols.find(function(s){ return s.id===p.statut; })||cols[0];
