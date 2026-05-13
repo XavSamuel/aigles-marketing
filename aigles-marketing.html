@@ -3189,11 +3189,14 @@ function getSB() {
     _sb = window.supabase.createClient(SB_URL, SB_KEY, {
       auth: {
         persistSession: true,
-        autoRefreshToken: true,
+        autoRefreshToken: false,
         detectSessionInUrl: false,
         storage: window.localStorage,
       },
-      realtime: { enabled: false },
+      realtime: { params: { eventsPerSecond: 2 } },
+      global: {
+        fetch: (...args) => fetch(...args).catch(() => new Response('{}', {status: 200}))
+      }
     });
   }
   return _sb;
@@ -3519,27 +3522,30 @@ function showApp(user) {
   if(ls) ls.style.display = 'none';
   if(app) app.style.display = '';
   if(main) main.style.display = '';
-  // Show user bar
   if(ub) ub.style.display = 'block';
   updateUserBar();
-  // Realtime sync
-  if(_realtimeChannel) try{getSB()?.removeChannel(_realtimeChannel);}catch(e){}
-  const _sb = getSB();
-  if(_sb) {
-    _realtimeChannel = _sb.channel('collab')
-      .on('postgres_changes', {event:'*',schema:'public',table:'app_state',filter:'key=eq.main'},
-        payload => {
-          if(_localDirty) return;
-          if(payload.new && payload.new.data) {
-            applyStateData(payload.new.data);
-            try{localStorage.setItem('qg_marketing_v1',JSON.stringify(payload.new.data));}catch(e){}
-            render(currentView);
-            setSyncStatus('saved');
-            setTimeout(()=>setSyncStatus('idle'),1500);
-          }
-        })
-      .subscribe();
-  }
+
+  // ── Polling toutes les 30 secondes ──
+  if(_realtimeChannel) clearInterval(_realtimeChannel);
+  _realtimeChannel = setInterval(async function() {
+    if(_localDirty) return; // skip si on a des changements locaux en cours
+    try {
+      const res = await sbFetch('/rest/v1/app_state?select=data,updated_at&key=eq.main');
+      if(!res.ok) return;
+      const rows = await res.json();
+      if(!rows || !rows[0]) return;
+      // Comparer le timestamp pour éviter d'écraser si on a les mêmes données
+      const serverTs = rows[0].updated_at;
+      if(serverTs && serverTs !== window._lastServerTs) {
+        window._lastServerTs = serverTs;
+        applyStateData(rows[0].data);
+        try { localStorage.setItem('qg_marketing_v1', JSON.stringify(rows[0].data)); } catch(e) {}
+        render(currentView);
+        setSyncStatus('saved');
+        setTimeout(() => setSyncStatus('idle'), 1500);
+      }
+    } catch(e) {}
+  }, 30000);
 }
 
 function updateUserBar() {
@@ -3610,10 +3616,17 @@ async function doSignup() {
 }
 
 async function doLogout() {
-  const sb = getSB();
-  if(sb) await sb.auth.signOut();
+  // Clear session locally immediately, fire signOut in background
   currentUser = null;
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith('sb-') || k.includes('supabase'))
+      .forEach(k => localStorage.removeItem(k));
+  } catch(e) {}
+  if(_realtimeChannel) { clearInterval(_realtimeChannel); _realtimeChannel = null; }
   showLoginScreen();
+  // Background signOut (don't wait for it)
+  try { const sb = getSB(); if(sb) sb.auth.signOut().catch(()=>{}); } catch(e) {}
 }
 
 function showLoginError(msg) {
