@@ -3237,6 +3237,15 @@ async function sbFetch(path, options) {
   return res;
 }
 
+function buildStateData() {
+  return {
+    partenariats, placements, deals, evenements, matchs,
+    evenementsBase, planifications, budgetGlobal,
+    GROUPS: GROUPS.map(g => ({ id:g.id, label:g.label, color:g.color, dealId:g.dealId||null, _planId:g._planId||null })),
+    publications, pubStatuts, idCtr
+  };
+}
+
 async function saveToDB() {
   saveToLS_fallback();
   try {
