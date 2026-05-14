@@ -1315,6 +1315,15 @@ function renderCampagnes() {
     hdr.addEventListener('click',()=>{const gid=hdr.dataset.gid;collapsedGroups.has(gid)?collapsedGroups.delete(gid):collapsedGroups.add(gid);renderCampagnes();});
   });
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.edit-btn').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();openEditModal(btn.dataset.id);}));
+  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.camp-del-btn').forEach(btn=>btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    const id = btn.dataset.id;
+    if(!confirm('Supprimer cette campagne?')) return;
+    snapshot();
+    partenariats = partenariats.filter(x=>x.id!==id);
+    placements = placements.filter(x=>x.id!==id);
+    saveState(); renderCampagnes(); toast('Campagne supprimée');
+  }));
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.dup-btn').forEach(btn=>btn.addEventListener('click',e=>{
     e.stopPropagation();
     const src = allCamps().find(x=>x.id===btn.dataset.id); if(!src) return;
