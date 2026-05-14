@@ -1391,6 +1391,11 @@ function renderCampagnes() {
         }
       }
 
+      // Recalculate budget/jour after budget update
+      if(c.budget && c.debut && c.fin) {
+        const days = Math.max(1, Math.round((new Date(c.fin+'T12:00') - new Date(c.debut+'T12:00')) / 86400000) + 1);
+        c.budgetJour = parseFloat((c.budget / days).toFixed(2));
+      }
       scheduleSave();
       renderCampagnes();
       if(typeof renderCRM === 'function') renderCRM();
@@ -3274,6 +3279,52 @@ async function sbFetch(path, options) {
     body: options.body || undefined
   });
   return res;
+}
+
+// ── Campaign inline save helpers ──
+function saveCampCell(el) {
+  const c = allCamps().find(x => x.id === el.dataset.id); if(!c) return;
+  const val = el.textContent.trim(); if(c[el.dataset.f] === val) return;
+  c[el.dataset.f] = val; scheduleSave();
+}
+function saveCampNum(inp) {
+  const c = allCamps().find(x => x.id === inp.dataset.id); if(!c) return;
+  const val = parseFloat(inp.value) || 0; if(c[inp.dataset.f] === val) return;
+  c[inp.dataset.f] = val; scheduleSave();
+}
+function saveCampDate(inp) {
+  const c = allCamps().find(x => x.id === inp.dataset.id); if(!c) return;
+  if(c[inp.dataset.f] === inp.value) return;
+  c[inp.dataset.f] = inp.value;
+  scheduleSave();
+  const row = inp.closest('tr'); if(!row) return;
+  const jourInp = row.querySelector('.camp-num-jour');
+  if(jourInp && c.budget && c.debut && c.fin) {
+    const days = Math.max(1, Math.round((new Date(c.fin+'T12:00') - new Date(c.debut+'T12:00')) / 86400000) + 1);
+    jourInp.value = (c.budget / days).toFixed(2);
+  }
+}
+function campRowCalcJour(inp) {
+  const c = allCamps().find(x => x.id === inp.dataset.id); if(!c) return;
+  const budget = parseFloat(inp.value) || 0;
+  if(c.debut && c.fin) {
+    const days = Math.max(1, Math.round((new Date(c.fin+'T12:00') - new Date(c.debut+'T12:00')) / 86400000) + 1);
+    const row = inp.closest('tr'); if(!row) return;
+    const jourInp = row.querySelector('.camp-num-jour');
+    if(jourInp) jourInp.value = (budget / days).toFixed(2);
+  }
+}
+function campRowCalcTotal(inp) {
+  const c = allCamps().find(x => x.id === inp.dataset.id); if(!c) return;
+  const jourVal = parseFloat(inp.value) || 0;
+  if(c.debut && c.fin && jourVal) {
+    const days = Math.max(1, Math.round((new Date(c.fin+'T12:00') - new Date(c.debut+'T12:00')) / 86400000) + 1);
+    c.budget = Math.round(jourVal * days);
+    const row = inp.closest('tr'); if(!row) return;
+    const budgetInp = row.querySelector('.camp-num-inp[data-f="budget"]');
+    if(budgetInp) budgetInp.value = c.budget;
+    scheduleSave();
+  }
 }
 
 function buildStateData() {
