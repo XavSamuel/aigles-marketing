@@ -1296,7 +1296,6 @@ function renderCampagnes() {
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.grp-hdr').forEach(hdr=>{
     hdr.addEventListener('click',()=>{const gid=hdr.dataset.gid;collapsedGroups.has(gid)?collapsedGroups.delete(gid):collapsedGroups.add(gid);renderCampagnes();});
   });
-  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('tbody tr[data-id]').forEach(r=>r.addEventListener('click',()=>openEditModal(r.dataset.id)));
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.edit-btn').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();openEditModal(btn.dataset.id);}));
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.dup-btn').forEach(btn=>btn.addEventListener('click',e=>{
     e.stopPropagation();
