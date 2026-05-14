@@ -1383,12 +1383,9 @@ function renderCampagnes() {
         if(prod) {
           const totalQty = parseFloat(prod.quantite) || 0;
           const totalPrix = parseFloat(prod.prix) || 0;
-          if(totalQty > 0 && totalPrix > 0) {
-            c.budget = Math.round(c.dealProductQty / totalQty * totalPrix);
-            // Update the budget input visually
-            const budgetInp = ($('campagnes-content')||document).querySelector('.camp-num-inp[data-id="'+c.id+'"][data-f="budget"]');
-            if(budgetInp) budgetInp.value = c.budget;
-          }
+          c.budget = totalQty > 0 ? Math.round(c.dealProductQty / totalQty * totalPrix) : 0;
+          const budgetInp = ($('campagnes-content')||document).querySelector('.camp-num-inp[data-id="'+c.id+'"][data-f="budget"]');
+          if(budgetInp) budgetInp.value = c.budget;
         }
       }
 
