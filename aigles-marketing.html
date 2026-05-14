@@ -1315,47 +1315,20 @@ function renderCampagnes() {
     row.addEventListener('mouseleave',()=>row.style.opacity='0.4');
     row.addEventListener('click', () => {
       const gid = row.dataset.gid;
-      // Insert inline editable row
-      const tbody = row.closest('tbody');
-      if(tbody.querySelector('.inline-camp-row')) return; // already open
-      const tr = document.createElement('tr');
-      tr.className = 'inline-camp-row';
-      tr.innerHTML = '<td><input class="crm-inline-input icr-nom" placeholder="Nom de la campagne" style="width:100%;font-weight:500"></td>'
-        +'<td><input type="number" class="crm-inline-input icr-budget" placeholder="0" min="0" style="width:80px;text-align:right"></td>'
-        +'<td style="color:var(--t3);font-size:11px">$0</td>'
-        +'<td></td>'
-        +'<td style="display:flex;gap:4px;align-items:center">'
-          +'<input type="date" class="crm-inline-input fi icr-debut" style="font-size:11px;padding:3px 5px;width:130px">'
-          +'<span style="color:var(--t3)">→</span>'
-          +'<input type="date" class="crm-inline-input fi icr-fin" style="font-size:11px;padding:3px 5px;width:130px">'
-        +'</td>'
-        +'<td><select class="crm-inline-select icr-statut"><option value="planifie">Planifié</option><option value="actif">Actif</option></select></td>'
-        +'<td style="white-space:nowrap">'
-          +'<button class="btn btn-w btn-sm icr-save" style="padding:2px 8px;font-size:10px">Ajouter</button>'
-          +'<button class="btn btn-ghost btn-sm icr-cancel" style="padding:2px 8px;font-size:10px;margin-left:3px">×</button>'
-        +'</td>';
-      tbody.insertBefore(tr, row);
-      const nomInp = tr.querySelector('.icr-nom');
-      nomInp.focus();
-      styleDateInputs(tr);
-      tr.querySelector('.icr-cancel').addEventListener('click', () => tr.remove());
-      tr.querySelector('.icr-save').addEventListener('click', () => {
-        const nom = tr.querySelector('.icr-nom').value.trim();
-        if(!nom) { tr.querySelector('.icr-nom').focus(); return; }
-        snapshot();
-        const g2 = GROUPS.find(x=>x.id===gid); if(!g2) return;
-        const newC = {id:'pl'+(++idCtr), nom, _groupId: gid,
-          budget:parseFloat(tr.querySelector('.icr-budget').value)||0,
-          depense:0,
-          debut:tr.querySelector('.icr-debut').value,
-          fin:tr.querySelector('.icr-fin').value,
-          statut:tr.querySelector('.icr-statut').value,
-          canal:'custom', impressions:0, clics:0,
-          segments:[], persona:[], notes:'', periodes:[]};
-        placements.push(newC);
-        saveState(); renderCampagnes(); toast('Campagne ajoutée');
-      });
-      nomInp.addEventListener('keydown', e => { if(e.key==='Enter') tr.querySelector('.icr-save').click(); if(e.key==='Escape') tr.remove(); });
+      const g2 = GROUPS.find(x=>x.id===gid); if(!g2) return;
+      const newC = {
+        id:'pl'+(++idCtr), nom:'Nouvelle campagne', _groupId:gid,
+        budget:0, depense:0, debut:'', fin:'', statut:'planifie',
+        canal:'custom', impressions:0, clics:0,
+        segments:[], persona:[], notes:'', periodes:[],
+        dealProductId:'', dealProductQty:0
+      };
+      placements.push(newC);
+      scheduleSave(); renderCampagnes();
+      setTimeout(() => {
+        const rows = ($('campagnes-content')||document).querySelectorAll('.camp-cell-edit');
+        if(rows.length) rows[rows.length-1].focus();
+      }, 50);
     });
   });
 
