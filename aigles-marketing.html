@@ -171,8 +171,10 @@ tbody tr:last-child td{border-bottom:none}
 /* ── GANTT ── */
 .gantt-wrap{background:var(--bgc);border:1px solid var(--b);border-radius:var(--rl);overflow:hidden;margin-bottom:14px;user-select:none}
 .gantt-tb{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:var(--bgp);border-bottom:1px solid var(--b)}
-.gantt-scroll{overflow-x:auto;cursor:grab;user-select:none}.gantt-scroll.panning{cursor:grabbing}
-.gantt-inner{min-width:780px}
+.gantt-scroll{overflow-x:auto;cursor:default;user-select:none;scroll-behavior:smooth}.gantt-scroll.panning{cursor:grabbing}
+.gantt-inner{min-width:max-content}
+.glc{position:sticky;left:0;z-index:3;background:var(--bgc)}
+.gantt-head .glc{z-index:4;background:var(--bgc)}
 .gantt-head{display:flex;background:var(--bgp);border-bottom:1px solid var(--b);position:sticky;top:0;z-index:5}
 .glc{width:180px;flex-shrink:0;padding:5px 10px;font-size:9px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;border-right:1px solid var(--b)}
 .gmonths{flex:1;display:grid}
@@ -1235,9 +1237,8 @@ function renderCampagnes() {
           +'<button class="mode-btn'+(ganttMode==='weeks'?' active':'"')+' onclick="setGanttMode(\'weeks\')">Semaines</button>'
           +'<button class="mode-btn'+(ganttMode==='days'?' active':'"')+' onclick="setGanttMode(\'days\')">Jours</button>'
         +'</div>'
-        +'<button class="btn btn-sm" onclick="ganttOffset-=(ganttMode===\'days\'?7:ganttMode===\'weeks\'?4:3);renderGanttFull()">←</button>'
-        +'<span id="gantt-range" style="font-size:11px;color:var(--t2);min-width:120px;text-align:center"></span>'
-        +'<button class="btn btn-sm" onclick="ganttOffset+=(ganttMode===\'days\'?7:ganttMode===\'weeks\'?4:3);renderGanttFull()">→</button>'
+        +'<button class="btn btn-sm" onclick="scrollGanttToToday()" style="font-size:11px">Aujourd\'hui</button>'
+        +'<span id="gantt-range" style="font-size:11px;color:var(--t2);min-width:80px;text-align:center"></span>'
       +'</div></div>'
       +'<div class="gantt-scroll"><div class="gantt-inner" id="gantt-inner"></div></div>'
     +'</div>';
@@ -1469,16 +1470,25 @@ function renderGanttFull(){
   } // end isW
   const isD=ganttMode==='days';
   if(isD){
-    const base=new Date();base.setDate(base.getDate()+ganttOffset);base.setHours(0,0,0,0);
-    start=new Date(base); end=new Date(start.getTime()+30*24*3600*1000-1);
+    // Full season: all campaigns min date to max date (or May–Oct 2026 fallback)
+    const allC=allCamps();
+    const campDates=allC.flatMap(c=>[c.debut,c.fin]).filter(Boolean).sort();
+    const sDate = campDates.length ? new Date(campDates[0]+'T12:00') : new Date(2026,4,1);
+    const eDate = campDates.length ? new Date(campDates[campDates.length-1]+'T12:00') : new Date(2026,9,31);
+    // Pad by 7 days each side
+    sDate.setDate(sDate.getDate()-7); eDate.setDate(eDate.getDate()+7);
+    sDate.setHours(0,0,0,0); eDate.setHours(23,59,59,0);
+    start=new Date(sDate); end=new Date(eDate);
     cols=[];let d=new Date(start);
-    for(let i=0;i<30;i++){
+    while(d<=end){
       const dd=('0'+d.getDate()).slice(-2),mm=('0'+(d.getMonth()+1)).slice(-2);
       const isWknd=d.getDay()===0||d.getDay()===6;
-      cols.push({start:new Date(d),end:new Date(d.getTime()+24*3600*1000-1),label:dd+'/'+mm,weekend:isWknd});
+      // Only show label on 1st of month or every 7 days
+      const showLbl = d.getDate()===1 || d.getDate()===8||d.getDate()===15||d.getDate()===22;
+      cols.push({start:new Date(d),end:new Date(d.getTime()+24*3600*1000-1),label:showLbl?(d.getDate()===1?GM[d.getMonth()]+' '+d.getFullYear():dd+'/'+mm):'',weekend:isWknd});
       d=new Date(d.getTime()+24*3600*1000);
     }
-    if($('gantt-range')) $('gantt-range').textContent=('0'+start.getDate()).slice(-2)+'/'+('0'+(start.getMonth()+1)).slice(-2)+' – '+('0'+end.getDate()).slice(-2)+'/'+('0'+(end.getMonth()+1)).slice(-2);
+    if($('gantt-range')) $('gantt-range').textContent='';
     isCur=col=>{const t=new Date();t.setHours(0,0,0,0);return t.getTime()===col.start.getTime();};
   }else if(!isW){
     start=new Date(2026,ganttOffset,1);end=new Date(start.getFullYear(),start.getMonth()+6,0);
@@ -1501,17 +1511,20 @@ function renderGanttFull(){
   // Also add built-in cats that have items
   GCATS.forEach(cat=>{const it=cat.items();if(it.length&&!cats.find(c=>c.id===cat.id))cats.push(cat);});
 
-  let html='<div class="gantt-head"><div class="glc">Campagne</div><div class="gmonths" style="grid-template-columns:repeat('+n+',1fr)">'+cols.map(col=>'<div class="gmonth'+(isCur(col)?' cur':'')+(col.weekend?' gmonth-wknd':'')+'">'+col.label+'</div>').join('')+'</div></div>';
+  const colW = isD ? 28 : (isW ? 60 : 80); // px per column
+  const gridCols = isD ? cols.map(()=>colW+'px').join(' ') : 'repeat('+n+',1fr)';
+  const innerW = isD ? (cols.length*colW)+'px' : '100%';
+  let html='<div class="gantt-head" style="'+(isD?'width:calc(200px + '+innerW+')':'')+'"><div class="glc">Campagne</div><div class="gmonths" style="grid-template-columns:'+gridCols+';'+(isD?'width:'+innerW:'')+'width:'+innerW+'">'+cols.map(col=>'<div class="gmonth'+(isCur(col)?' cur':'')+(col.weekend?' gmonth-wknd':'')+'">'+col.label+'</div>').join('')+'</div></div>';
 
   if(!cats.length){html+='<div style="padding:24px;text-align:center;font-size:12px;color:var(--t3)">Aucune campagne à afficher</div>';}
   cats.forEach(cat=>{
     const items=cat.items();if(!items.length)return;
     const coll=collapsedCats.has(cat.id);
-    html+='<div class="gcat-row" data-catid="'+cat.id+'"><div class="gcl"><span class="garrow'+(coll?'':' open')+'">&#9654;</span><span style="width:7px;height:7px;border-radius:2px;background:'+cat.color+';opacity:0.7;flex-shrink:0"></span><span class="gcat-n">'+cat.label+'</span><span class="gcat-c">'+items.length+'</span></div><div class="gcbars" style="grid-template-columns:repeat('+n+',1fr)">'+Array(n).fill('<div class="ggl"></div>').join('')+tl+'</div></div>';
+    html+='<div class="gcat-row" data-catid="'+cat.id+'"><div class="gcl"><span class="garrow'+(coll?'':' open')+'">&#9654;</span><span style="width:7px;height:7px;border-radius:2px;background:'+cat.color+';opacity:0.7;flex-shrink:0"></span><span class="gcat-n">'+cat.label+'</span><span class="gcat-c">'+items.length+'</span></div><div class="gcbars" style="grid-template-columns:'+gridCols+';'+(isD?'width:'+innerW:'')+'">'+Array(n).fill('<div class="ggl"></div>').join('')+tl+'</div></div>';
     if(!coll){
       items.forEach(item=>{
         const l=pct(item.debut),r=pct(item.fin), inView=l!==null&&r!==null&&r>0&&l<100, w=inView?Math.max(r-l,0.5):0;
-        html+='<div class="gitem-row"><div class="gil" data-id="'+item.id+'" title="'+item.nom+'">'+item.nom+'</div><div class="gib" data-tms="'+totalMs+'" data-sms="'+start.getTime()+'">'+grid(n)+tl+(inView?'<div class="gbar" data-id="'+item.id+'" style="left:'+l+'%;width:'+w+'%;background:'+cat.color+';opacity:'+(item.statut==='termine'?'0.35':'0.75')+'"><div class="grz grz-l" data-id="'+item.id+'" data-dt="l"></div><span class="gbar-lbl">'+item.nom+'</span><div class="grz grz-r" data-id="'+item.id+'" data-dt="r"></div></div>':'')+'</div></div>';
+        html+='<div class="gitem-row"><div class="gil" data-id="'+item.id+'" title="'+item.nom+'">'+item.nom+'</div><div class="gib" data-tms="'+totalMs+'" data-sms="'+start.getTime()+'" style="'+(isD?'width:'+innerW:'')+'">'+grid(n)+tl+(inView?'<div class="gbar" data-id="'+item.id+'" style="left:'+l+'%;width:'+w+'%;background:'+cat.color+';opacity:'+(item.statut==='termine'?'0.35':'0.75')+'"><div class="grz grz-l" data-id="'+item.id+'" data-dt="l"></div><span class="gbar-lbl">'+item.nom+'</span><div class="grz grz-r" data-id="'+item.id+'" data-dt="r"></div></div>':'')+'</div></div>';
       });
     }
   });
@@ -1524,15 +1537,13 @@ function renderGanttFull(){
     ganttTarget.innerHTML = '<div class="gantt-wrap" style="margin-top:0"><div class="gantt-tb">'
       +'<span style="font-size:12px;font-weight:600">Calendrier des campagnes</span>'
       +'<div style="display:flex;align-items:center;gap:8px">'
-        +'<span style="font-size:10px;color:var(--t3)">Clic · Glisser · Poignées</span>'
         +'<div class="mode-toggle">'
           +'<button class="mode-btn'+(ganttMode==='months'?' active':'')+'" onclick="setGanttMode(\'months\')">Mois</button>'
           +'<button class="mode-btn'+(ganttMode==='weeks'?' active':'')+'" onclick="setGanttMode(\'weeks\')">Semaines</button>'
           +'<button class="mode-btn'+(ganttMode==='days'?' active':'')+'" onclick="setGanttMode(\'days\')">Jours</button>'
         +'</div>'
-        +'<button class="btn btn-sm" onclick="ganttOffset-=(ganttMode===\'days\'?7:ganttMode===\'weeks\'?4:3);renderGanttFull()">←</button>'
-        +'<span id="gantt-range" style="font-size:11px;color:var(--t2);min-width:120px;text-align:center"></span>'
-        +'<button class="btn btn-sm" onclick="ganttOffset+=(ganttMode===\'days\'?7:ganttMode===\'weeks\'?4:3);renderGanttFull()">→</button>'
+        +'<button class="btn btn-sm" onclick="scrollGanttToToday()" style="font-size:11px">Aujourd\'hui</button>'
+        +'<span id="gantt-range" style="font-size:11px;color:var(--t2);min-width:80px;text-align:center"></span>'
       +'</div></div>'
       +'<div class="gantt-scroll"><div class="gantt-inner" id="gantt-inner"></div></div>'
     +'</div>';
@@ -1540,6 +1551,7 @@ function renderGanttFull(){
 
   ganttTarget.querySelector ? null : null; // no-op
   if($('gantt-inner')) $('gantt-inner').innerHTML = html;
+  if(isD) setTimeout(scrollGanttToToday, 50);
   ($('gantt-inner')||{querySelectorAll:()=>[]}).querySelectorAll('.gcat-row').forEach(row=>row.addEventListener('click',()=>{const cid=row.dataset.catid;collapsedCats.has(cid)?collapsedCats.delete(cid):collapsedCats.add(cid);renderGanttFull();}));
   ($('gantt-inner')||{querySelectorAll:()=>[]}).querySelectorAll('.gil').forEach(l=>l.addEventListener('click',e=>{e.stopPropagation();openEditModal(l.dataset.id);}));
   ($('gantt-inner')||{querySelectorAll:()=>[]}).querySelectorAll('.gbar').forEach(bar=>{
@@ -4597,6 +4609,17 @@ function openEditModal(id){
 
 // Gantt drag-to-pan
 (function(){
+  function scrollGanttToToday(){
+    const sc=document.querySelector('.gantt-scroll');
+    if(!sc) return;
+    const todayLine=sc.querySelector('.gtl');
+    if(todayLine){
+      const pct=parseFloat(todayLine.style.left)/100;
+      const inner=sc.querySelector('.gib,.gcbars');
+      const totalW=inner?inner.offsetWidth:sc.scrollWidth;
+      sc.scrollLeft=totalW*pct - sc.offsetWidth/2;
+    }
+  }
   let panning=false, panStartX=0, panStartScroll=0, panMoved=false;
   document.addEventListener('DOMContentLoaded', ()=>{});
   function initGanttPan(){
