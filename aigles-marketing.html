@@ -896,7 +896,7 @@ let _realtimeChannel = null; // "liste" | "gantt"
 let collapsedPlans = new Set();
 let idCtr = 100;
 let calY = 2026, calM = 3;
-let ganttOffset = 0, ganttMode = 'days';
+let ganttOffset = 0, ganttMode = 'days', ganttScrollInit = false;
 let currentView = 'home';
 let gDrag = null, gDragMoved = false;
 let gPopId = null;
@@ -1452,7 +1452,7 @@ const GCATS=[
 
 $('gnav-prev').addEventListener('click',()=>{ganttOffset-=(ganttMode==='days'?7:ganttMode==='weeks'?4:3);renderGanttFull();});
 $('gnav-next').addEventListener('click',()=>{ganttOffset+=(ganttMode==='days'?7:ganttMode==='weeks'?4:3);renderGanttFull();});
-function setGanttMode(m){ganttMode=m;ganttOffset=0;$('gm-months').classList.toggle('active',m==='months');$('gm-weeks').classList.toggle('active',m==='weeks');if($('gm-days'))$('gm-days').classList.toggle('active',m==='days');renderGanttFull();}
+function setGanttMode(m){ganttMode=m;ganttOffset=0;ganttScrollInit=false;$('gm-months').classList.toggle('active',m==='months');$('gm-weeks').classList.toggle('active',m==='weeks');if($('gm-days'))$('gm-days').classList.toggle('active',m==='days');renderGanttFull();}
 $('cal-prev').addEventListener('click',()=>{calM--;if(calM<0){calM=11;calY--;}renderCal();});
 $('cal-next').addEventListener('click',()=>{calM++;if(calM>11){calM=0;calY++;}renderCal();});
 $('tog-paye').addEventListener('change',renderCal);$('tog-org').addEventListener('change',renderCal);
@@ -1551,7 +1551,7 @@ function renderGanttFull(){
 
   ganttTarget.querySelector ? null : null; // no-op
   if($('gantt-inner')) $('gantt-inner').innerHTML = html;
-  if(isD) setTimeout(scrollGanttToToday, 50);
+  if(isD && !ganttScrollInit){ ganttScrollInit=true; setTimeout(scrollGanttToToday, 80); }
   ($('gantt-inner')||{querySelectorAll:()=>[]}).querySelectorAll('.gcat-row').forEach(row=>row.addEventListener('click',()=>{const cid=row.dataset.catid;collapsedCats.has(cid)?collapsedCats.delete(cid):collapsedCats.add(cid);renderGanttFull();}));
   ($('gantt-inner')||{querySelectorAll:()=>[]}).querySelectorAll('.gil').forEach(l=>l.addEventListener('click',e=>{e.stopPropagation();openEditModal(l.dataset.id);}));
   ($('gantt-inner')||{querySelectorAll:()=>[]}).querySelectorAll('.gbar').forEach(bar=>{
@@ -4610,15 +4610,16 @@ function openEditModal(id){
 // Gantt drag-to-pan
 (function(){
   function scrollGanttToToday(){
+    if(ganttMode!=='days') return;
     const sc=document.querySelector('.gantt-scroll');
     if(!sc) return;
-    const todayLine=sc.querySelector('.gtl');
-    if(todayLine){
-      const pct=parseFloat(todayLine.style.left)/100;
-      const inner=sc.querySelector('.gib,.gcbars');
-      const totalW=inner?inner.offsetWidth:sc.scrollWidth;
-      sc.scrollLeft=totalW*pct - sc.offsetWidth/2;
-    }
+    const allC=allCamps();
+    const campDates=allC.flatMap(c=>[c.debut,c.fin]).filter(Boolean).sort();
+    const sDate=campDates.length?new Date(campDates[0]+'T12:00'):new Date(2026,4,1);
+    sDate.setDate(sDate.getDate()-7); sDate.setHours(0,0,0,0);
+    const today=new Date(); today.setHours(0,0,0,0);
+    const daysFromStart=Math.floor((today-sDate)/86400000);
+    sc.scrollLeft=daysFromStart*28 - sc.offsetWidth/2 + 14;
   }
   let panning=false, panStartX=0, panStartScroll=0, panMoved=false;
   document.addEventListener('DOMContentLoaded', ()=>{});
