@@ -1334,7 +1334,7 @@ function renderCampagnes() {
     copy.depense = 0;
     if(src.id.startsWith('p')) partenariats.push(copy);
     else placements.push(copy);
-    saveState(); renderCampagnes(); toast('Campagne dupliquée');
+    scheduleSave(); renderCampagnes(); toast('Campagne dupliquée');
   }));
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.new-camp-row').forEach(row=>{
     row.addEventListener('mouseenter',()=>row.style.opacity='0.8');
@@ -1841,7 +1841,7 @@ function renderCRM(){
   el.querySelectorAll('.crm-inline-input[data-f="contactNom"], .crm-inline-input[data-f="contactEmail"]').forEach(inp => {
     const save = () => {
       const d = deals.find(x=>x.id===inp.dataset.did); if(!d) return;
-      d[inp.dataset.f] = inp.value; saveState();
+      d[inp.dataset.f] = inp.value; scheduleSave();
     };
     inp.addEventListener('change', save);
     inp.addEventListener('blur', save);
@@ -1855,7 +1855,7 @@ function renderCRM(){
     });
     inp.addEventListener('blur', () => {
       const d = deals.find(x=>x.id===inp.dataset.did); if(!d) return;
-      d.budget = parseFloat(inp.value)||0; saveState();
+      d.budget = parseFloat(inp.value)||0; scheduleSave();
     });
   });
 
@@ -1865,6 +1865,7 @@ function renderCRM(){
       const d = deals.find(x=>x.id===inp.dataset.did); if(!d) return;
       const r = (d.recu||[]).find(x=>x.id===inp.dataset.rid); if(!r) return;
       r[inp.dataset.f] = inp.value;
+      scheduleSave();
     };
     inp.addEventListener('change', () => { save(); if(inp.dataset.f==='type'){snapshot();renderCRM();}});
     if(inp.tagName==='INPUT') inp.addEventListener('blur', save);
@@ -1876,6 +1877,7 @@ function renderCRM(){
       const d = deals.find(x=>x.id===inp.dataset.did); if(!d) return;
       const item = (d.donne||[]).find(x=>x.id===inp.dataset.iid); if(!item) return;
       item[inp.dataset.f] = inp.dataset.f==='quantite' ? parseInt(inp.value)||0 : inp.value;
+      scheduleSave();
     };
     inp.addEventListener('change', save);
     inp.addEventListener('blur', save);
@@ -1952,7 +1954,7 @@ function renderCRM(){
           ev.stopPropagation();
           const d = deals.find(x=>x.id===icon.dataset.did); if(!d) return;
           snapshot(); d.couleur = c;
-          saveState(); renderCRM();
+          scheduleSave(); renderCRM();
           popup.remove();
         });
         popup.appendChild(sw);
@@ -4840,7 +4842,7 @@ function assignPub(pubId) {
   const p = publications.find(x => x.id === pubId); if(!p) return;
   openAssignModal(p.assigneA || null, (uid) => {
     snapshot(); p.assigneA = uid || null;
-    saveState(); renderPublications();
+    scheduleSave(); renderPublications();
     toast(uid ? 'Assigné' : 'Assignation retirée');
   });
 }
