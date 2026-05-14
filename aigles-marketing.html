@@ -1113,7 +1113,7 @@ function buildGroupHtml(g, all) {
   const topR = open ? 'var(--rl) var(--rl) 0 0' : 'var(--rl)';
   const SLIST = [{id:'planifie',lbl:'Planifié',c:'#d97706'},{id:'actif',lbl:'Actif',c:'#16a34a'},{id:'pause',lbl:'En pause',c:'#6b7280'},{id:'termine',lbl:'Terminé',c:'#5b4ef8'}];
   const linkedDeal = g.dealId ? deals.find(d=>d.id===g.dealId) : null;
-  const dealProducts = linkedDeal ? (linkedDeal.recu||[]).filter(r=>r.detail||r.type) : [];
+  const dealProducts = linkedDeal ? (linkedDeal.recu||[]).filter(r=>r.titre||r.format||r.type) : [];
   const hasProd = dealProducts.length > 0;
 
   let hh = '<div class="grp-wrap">'
@@ -1184,7 +1184,7 @@ function buildGroupHtml(g, all) {
         + (hasProd
           ? '<td><select class="camp-prod-sel" data-id="'+c.id+'" style="font-size:10.5px;border:1px solid var(--b);border-radius:6px;padding:2px 5px;background:var(--bgp);max-width:130px">'
               + '<option value="">— produit</option>'
-              + dealProducts.map(r=>'<option value="'+r.id+'"'+(c.dealProductId===r.id?' selected':'')+'>'+(r.detail||r.type||'?')+'</option>').join('')
+              + dealProducts.map(r=>'<option value="'+r.id+'"'+(c.dealProductId===r.id?' selected':'')+'>'+(r.titre||r.format||r.type||'?')+'</option>').join('')
             + '</select></td>'
           + '<td><input type="number" class="camp-prod-qty" data-id="'+c.id+'" value="'+(c.dealProductQty||'')+'" min="0" placeholder="0"'
               + ' style="width:55px;border:1px solid var(--b);background:var(--bgp);font-size:11px;font-family:var(--font);padding:2px 5px;border-radius:6px" title="Qté utilisée"></td>'
