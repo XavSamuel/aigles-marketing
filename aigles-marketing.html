@@ -1322,7 +1322,7 @@ function renderCampagnes() {
     snapshot();
     partenariats = partenariats.filter(x=>x.id!==id);
     placements = placements.filter(x=>x.id!==id);
-    saveState(); renderCampagnes(); toast('Campagne supprimée');
+    scheduleSave(); renderCampagnes(); toast('Campagne supprimée');
   }));
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.dup-btn').forEach(btn=>btn.addEventListener('click',e=>{
     e.stopPropagation();
