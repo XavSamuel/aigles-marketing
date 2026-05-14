@@ -1358,6 +1358,51 @@ function renderCampagnes() {
       nomInp.addEventListener('keydown', e => { if(e.key==='Enter') tr.querySelector('.icr-save').click(); if(e.key==='Escape') tr.remove(); });
     });
   });
+
+  // ── Deal badge — lier/changer l'entente CRM d'un groupe ──
+  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.grp-deal-badge').forEach(badge => {
+    badge.addEventListener('click', e => {
+      e.stopPropagation();
+      const g = GROUPS.find(x => x.id === badge.dataset.gid); if(!g) return;
+      const opts = deals.map(d => '<option value="'+d.id+'"'+(g.dealId===d.id?' selected':'')+'>'+(d.entreprise||d.partenaire||'?')+'</option>').join('');
+      const sel = document.createElement('select');
+      sel.className = 'fs';
+      sel.style.cssText = 'font-size:11px;padding:4px 8px;border-radius:8px;position:absolute;z-index:300;background:#fff;border:1px solid var(--b);box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:180px';
+      sel.innerHTML = '<option value="">— Aucune entente —</option>' + opts;
+      badge.style.position = 'relative';
+      badge.appendChild(sel);
+      sel.focus();
+      sel.addEventListener('change', () => {
+        g.dealId = sel.value || null;
+        scheduleSave(); sel.remove(); renderCampagnes();
+      });
+      sel.addEventListener('blur', () => setTimeout(() => sel.remove(), 200));
+    });
+  });
+
+  // ── Produit CRM selector ──
+  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.camp-prod-sel').forEach(sel => {
+    sel.addEventListener('change', e => {
+      e.stopPropagation();
+      const c = allCamps().find(x => x.id === sel.dataset.id); if(!c) return;
+      c.dealProductId = sel.value;
+      scheduleSave();
+      // Re-render CRM restant column
+      if(typeof renderCRM === 'function') renderCRM();
+    });
+  });
+
+  // ── Quantité utilisée ──
+  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.camp-prod-qty').forEach(inp => {
+    inp.addEventListener('change', e => {
+      e.stopPropagation();
+      const c = allCamps().find(x => x.id === inp.dataset.id); if(!c) return;
+      c.dealProductQty = parseFloat(inp.value) || 0;
+      scheduleSave();
+      if(typeof renderCRM === 'function') renderCRM();
+    });
+  });
+
   // Delete group
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.grp-del-btn').forEach(btn => {
     btn.addEventListener('click', e => {
