@@ -1164,8 +1164,9 @@ function buildGroupHtml(g, all) {
           + ' oninput="campRowCalcJour(this)"></div></td>'
         + '<td><div style="display:flex;align-items:center;gap:2px"><span style="font-size:10px;color:var(--t3)">$</span>'
           + '<input type="number" class="camp-num-jour" data-id="'+c.id+'" value="'+jourVal+'" min="0" placeholder="—"'
-          + ' style="width:55px;border:none;background:transparent;font-size:12px;font-family:var(--font);color:var(--t2);padding:2px 4px;border-radius:4px"'
-          + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';campRowCalcTotal(this)"></div></td>'
+          + (hasProd && c.dealProductId ? ' readonly title="Calculé automatiquement depuis le CRM" style="width:55px;border:none;background:transparent;font-size:12px;font-family:var(--font);color:var(--t2);padding:2px 4px;border-radius:4px;cursor:not-allowed;opacity:0.7"' : ' style="width:55px;border:none;background:transparent;font-size:12px;font-family:var(--font);color:var(--t2);padding:2px 4px;border-radius:4px"'
+          + ' onfocus="this.style.background=\'var(--bgh)\'" onblur="this.style.background=\'\';campRowCalcTotal(this)"')
+          + '></div></td>'
         + '<td><div style="display:flex;align-items:center;gap:2px"><span style="font-size:10px;color:var(--t3)">$</span>'
           + '<input type="number" class="camp-num-inp" data-id="'+c.id+'" data-f="depense" value="'+(c.depense||0)+'" min="0"'
           + ' style="width:52px;border:none;background:transparent;font-size:12px;font-family:var(--font);color:var(--t);padding:2px 4px;border-radius:4px"'
@@ -4303,12 +4304,10 @@ function renderBuildupChart() {
     }
   });
 
-  // Cumulative
-  const cumulative = [];
-  let sum = 0;
-  dailyBudget.forEach(v => { sum += v; cumulative.push(sum); });
-  const maxVal = sum || 1;
-  if(totalEl) totalEl.textContent = fmtM(Math.round(sum));
+  // Use daily budget for display (not cumulative)
+  const maxVal = Math.max(...dailyBudget, 1);
+  const totalBudget = dailyBudget.reduce((s, v) => s + v, 0);
+  if(totalEl) totalEl.textContent = fmtM(Math.round(totalBudget));
 
   // SVG dimensions
   const W = el.offsetWidth || 600;
@@ -4372,21 +4371,16 @@ function renderBuildupChart() {
     svg += '<line x1="'+x+'" y1="'+(PT+CH+3)+'" x2="'+x+'" y2="'+(PT+CH+6)+'" stroke="#ccc" stroke-width="1"/>';
   });
 
-  // Build path for cumulative line
-  let path = '';
-  let areaPath = '';
+  // Daily budget bars
+  const barW = Math.max(1, CW / totalDays - 1);
+  svg += '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5b4ef8" stop-opacity="0.9"/><stop offset="100%" stop-color="#5b4ef8" stop-opacity="0.4"/></linearGradient></defs>';
   for(let i = 0; i < totalDays; i++) {
-    const x = xi(i);
-    const y = yi(cumulative[i]);
-    if(i === 0) { path += 'M '+x+' '+y; areaPath = 'M '+x+' '+(PT+CH)+' L '+x+' '+y; }
-    else { path += ' L '+x+' '+y; areaPath += ' L '+x+' '+y; }
+    if(dailyBudget[i] <= 0) continue;
+    const x = PL + (i / totalDays) * CW;
+    const barH = (dailyBudget[i] / maxVal) * CH;
+    const y = PT + CH - barH;
+    svg += '<rect x="'+x+'" y="'+y+'" width="'+barW+'" height="'+barH+'" fill="url(#bg)" rx="1"/>';
   }
-  areaPath += ' L '+xi(totalDays-1)+' '+(PT+CH)+' Z';
-
-  // Area fill
-  svg += '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5b4ef8" stop-opacity="0.15"/><stop offset="100%" stop-color="#5b4ef8" stop-opacity="0.01"/></linearGradient></defs>';
-  svg += '<path d="'+areaPath+'" fill="url(#bg)"/>';
-  svg += '<path d="'+path+'" fill="none" stroke="#5b4ef8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
 
   // Legend
   const legendY = PT + CH + 22;
