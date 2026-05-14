@@ -1466,6 +1466,7 @@ function renderGanttFull(){
     for(let i=0;i<12;i++){const we=new Date(w.getTime()+6*24*3600*1000);cols.push({start:new Date(w),end:we,label:('0'+w.getDate()).slice(-2)+'/'+('0'+(w.getMonth()+1)).slice(-2)});w=new Date(w.getTime()+7*24*3600*1000);}
     if($('gantt-range')) $('gantt-range').textContent='Sem. '+('0'+start.getDate()).slice(-2)+'/'+('0'+(start.getMonth()+1)).slice(-2)+' – '+('0'+end.getDate()).slice(-2)+'/'+('0'+(end.getMonth()+1)).slice(-2);
     isCur=col=>{const t=new Date(today);t.setHours(0,0,0,0);return t>=col.start&&t<=col.end;};
+  } // end isW
   const isD=ganttMode==='days';
   if(isD){
     const base=new Date();base.setDate(base.getDate()+ganttOffset);base.setHours(0,0,0,0);
@@ -1594,7 +1595,6 @@ function saveGPop(){
   hideGPop();rerender();toast('Mis à jour');
 }
 document.addEventListener('click',e=>{const p=$('gpop');if(p.style.display!=='none'&&!p.contains(e.target)&&!e.target.closest('.gbar'))hideGPop();});
-}
 
 
 // CAL
