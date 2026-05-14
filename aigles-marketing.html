@@ -1225,6 +1225,22 @@ function renderCampagnes() {
 
   if(campVue === 'gantt') {
     $('campagnes-content').innerHTML = html + '<div id="gantt-container"></div>';
+    // Pre-insert gantt shell so gantt-range exists before renderGanttFull updates it
+    const _gc = $('gantt-container');
+    if(_gc) _gc.innerHTML = '<div class="gantt-wrap" style="margin-top:0"><div class="gantt-tb">'
+      +'<span style="font-size:12px;font-weight:600">Calendrier des campagnes</span>'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+        +'<div class="mode-toggle">'
+          +'<button class="mode-btn'+(ganttMode==='months'?' active':'"')+' onclick="setGanttMode(\'months\')">Mois</button>'
+          +'<button class="mode-btn'+(ganttMode==='weeks'?' active':'"')+' onclick="setGanttMode(\'weeks\')">Semaines</button>'
+          +'<button class="mode-btn'+(ganttMode==='days'?' active':'"')+' onclick="setGanttMode(\'days\')">Jours</button>'
+        +'</div>'
+        +'<button class="btn btn-sm" onclick="ganttOffset-=(ganttMode===\'days\'?7:ganttMode===\'weeks\'?4:3);renderGanttFull()">←</button>'
+        +'<span id="gantt-range" style="font-size:11px;color:var(--t2);min-width:120px;text-align:center"></span>'
+        +'<button class="btn btn-sm" onclick="ganttOffset+=(ganttMode===\'days\'?7:ganttMode===\'weeks\'?4:3);renderGanttFull()">→</button>'
+      +'</div></div>'
+      +'<div class="gantt-scroll"><div class="gantt-inner" id="gantt-inner"></div></div>'
+    +'</div>';
     renderGanttFull();
     return;
   }
@@ -1448,7 +1464,7 @@ function renderGanttFull(){
     start=new Date(base); end=new Date(start.getTime()+12*7*24*3600*1000-1);
     cols=[];let w=new Date(start);
     for(let i=0;i<12;i++){const we=new Date(w.getTime()+6*24*3600*1000);cols.push({start:new Date(w),end:we,label:('0'+w.getDate()).slice(-2)+'/'+('0'+(w.getMonth()+1)).slice(-2)});w=new Date(w.getTime()+7*24*3600*1000);}
-    $('gantt-range').textContent='Sem. '+('0'+start.getDate()).slice(-2)+'/'+('0'+(start.getMonth()+1)).slice(-2)+' – '+('0'+end.getDate()).slice(-2)+'/'+('0'+(end.getMonth()+1)).slice(-2);
+    if($('gantt-range')) $('gantt-range').textContent='Sem. '+('0'+start.getDate()).slice(-2)+'/'+('0'+(start.getMonth()+1)).slice(-2)+' – '+('0'+end.getDate()).slice(-2)+'/'+('0'+(end.getMonth()+1)).slice(-2);
     isCur=col=>{const t=new Date(today);t.setHours(0,0,0,0);return t>=col.start&&t<=col.end;};
   const isD=ganttMode==='days';
   if(isD){
@@ -1461,13 +1477,13 @@ function renderGanttFull(){
       cols.push({start:new Date(d),end:new Date(d.getTime()+24*3600*1000-1),label:dd+'/'+mm,weekend:isWknd});
       d=new Date(d.getTime()+24*3600*1000);
     }
-    $('gantt-range').textContent=('0'+start.getDate()).slice(-2)+'/'+('0'+(start.getMonth()+1)).slice(-2)+' – '+('0'+end.getDate()).slice(-2)+'/'+('0'+(end.getMonth()+1)).slice(-2);
+    if($('gantt-range')) $('gantt-range').textContent=('0'+start.getDate()).slice(-2)+'/'+('0'+(start.getMonth()+1)).slice(-2)+' – '+('0'+end.getDate()).slice(-2)+'/'+('0'+(end.getMonth()+1)).slice(-2);
     isCur=col=>{const t=new Date();t.setHours(0,0,0,0);return t.getTime()===col.start.getTime();};
   }else if(!isW){
     start=new Date(2026,ganttOffset,1);end=new Date(start.getFullYear(),start.getMonth()+6,0);
     cols=[];let c=new Date(start);
     while(c<=end){cols.push({y:c.getFullYear(),m:c.getMonth(),label:GM[c.getMonth()]+(c.getMonth()===0?' '+c.getFullYear():''),start:new Date(c),end:new Date(c.getFullYear(),c.getMonth()+1,0)});c=new Date(c.getFullYear(),c.getMonth()+1,1);}
-    $('gantt-range').textContent=GM[start.getMonth()]+' '+start.getFullYear()+' – '+GM[end.getMonth()]+' '+end.getFullYear();
+    if($('gantt-range')) $('gantt-range').textContent=GM[start.getMonth()]+' '+start.getFullYear()+' – '+GM[end.getMonth()]+' '+end.getFullYear();
     isCur=col=>col.y===today.getFullYear()&&col.m===today.getMonth();
   }
   const n=cols.length, totalMs=end-start, todayPct=(today-start)/totalMs*100;
