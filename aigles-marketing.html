@@ -1184,7 +1184,10 @@ function buildGroupHtml(g, all) {
         + (hasProd
           ? '<td><select class="camp-prod-sel" data-id="'+c.id+'" style="font-size:10.5px;border:1px solid var(--b);border-radius:6px;padding:2px 5px;background:var(--bgp);max-width:130px">'
               + '<option value="">— produit</option>'
-              + dealProducts.map(r=>'<option value="'+r.id+'"'+(c.dealProductId===r.id?' selected':'')+'>'+(r.titre||r.format||r.type||'?')+'</option>').join('')
+              + dealProducts.map(r=>{
+                  const label = r.titre || r.format || [r.type, r.sousType, r.duree].filter(Boolean).join(' · ') || '?';
+                  return '<option value="'+r.id+'"'+(c.dealProductId===r.id?' selected':'')+'>'+label+'</option>';
+                }).join('')
             + '</select></td>'
           + '<td><input type="number" class="camp-prod-qty" data-id="'+c.id+'" value="'+(c.dealProductQty||'')+'" min="0" placeholder="0"'
               + ' style="width:55px;border:1px solid var(--b);background:var(--bgp);font-size:11px;font-family:var(--font);padding:2px 5px;border-radius:6px" title="Qté utilisée"></td>'
@@ -1370,7 +1373,26 @@ function renderCampagnes() {
       e.stopPropagation();
       const c = allCamps().find(x => x.id === inp.dataset.id); if(!c) return;
       c.dealProductQty = parseFloat(inp.value) || 0;
+
+      // Auto-calculate budget: qty / totalQty × totalPrix
+      const grp = GROUPS.find(g => g.id === (c._groupId||c._gid||c.gid));
+      if(grp && grp.dealId && c.dealProductId) {
+        const deal = deals.find(d => d.id === grp.dealId);
+        const prod = deal && (deal.recu||[]).find(r => r.id === c.dealProductId);
+        if(prod) {
+          const totalQty = parseFloat(prod.quantite) || 0;
+          const totalPrix = parseFloat(prod.prix) || 0;
+          if(totalQty > 0 && totalPrix > 0) {
+            c.budget = Math.round(c.dealProductQty / totalQty * totalPrix);
+            // Update the budget input visually
+            const budgetInp = ($('campagnes-content')||document).querySelector('.camp-num-inp[data-id="'+c.id+'"][data-f="budget"]');
+            if(budgetInp) budgetInp.value = c.budget;
+          }
+        }
+      }
+
       scheduleSave();
+      renderCampagnes();
       if(typeof renderCRM === 'function') renderCRM();
     });
   });
