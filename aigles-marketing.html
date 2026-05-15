@@ -396,6 +396,7 @@ input[type="date"].pi::-webkit-calendar-picker-indicator{opacity:0.4;cursor:poin
 .crm-action-btn{background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;padding:0 5px;opacity:0;transition:opacity 0.1s}
 .crm-table tr:hover .crm-action-btn{opacity:1}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -511,6 +512,7 @@ input[type="date"].pi::-webkit-calendar-picker-indicator{opacity:0.4;cursor:poin
     <div class="topbar-right" id="topbar-right">
       <button class="btn btn-ghost btn-sm" id="btn-undo" onclick="undo()" disabled>Annuler</button>
       <button class="btn btn-ghost btn-sm" id="btn-redo" onclick="redo()" disabled>Refaire</button>
+      <button class="btn btn-ghost btn-sm" id="btn-export" onclick="exportCampagnesXLSX()" style="display:none">⬇ Exporter</button>
       <button class="btn btn-white btn-sm" onclick="handleNew()">+ Nouveau</button>
     </div>
   </div>
@@ -1006,6 +1008,8 @@ function navTo(v) {
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
   $('view-'+v).classList.add('active');
   $('topbar-title').textContent = PAGE_TITLES[v]||v;
+  const exportBtn = $('btn-export');
+  if(exportBtn) exportBtn.style.display = v === 'campagnes' ? '' : 'none';
   render(v);
 }
 function handleNew() {
@@ -1211,6 +1215,64 @@ function buildGroupHtml(g, all) {
     hh += '</tbody></table></div>';
   }
   return hh + '</div>';
+}
+
+
+function exportCampagnesXLSX() {
+  const rows = [['Groupe','Campagne','Budget Total ($)','Budget/Jour ($)','Dépensé ($)','Progression (%)','Date Début','Date Fin','Jours','Produit CRM','Quantité','Statut']];
+  const allGroups = [...new Set([...partenariats,...placements].map(c=>c.groupe||'Autres'))];
+  const groupMap = {};
+  [...partenariats,...placements].forEach(c=>{
+    const g = c.groupe||'Autres';
+    if(!groupMap[g]) groupMap[g]=[];
+    groupMap[g].push(c);
+  });
+  Object.entries(groupMap).forEach(([grpId, camps])=>{
+    const grp = deals.find(d=>d.id===grpId);
+    const grpLabel = grp ? grp.nom : grpId;
+    camps.forEach(c=>{
+      const debut = c.debut||'';
+      const fin = c.fin||'';
+      const days = (debut && fin) ? Math.max(1,Math.ceil((new Date(fin)-new Date(debut))/86400000)+1) : '';
+      const budJour = (c.budget && days) ? (c.budget/days).toFixed(2) : '';
+      const prog = c.budget > 0 ? Math.round((c.depense||0)/c.budget*100) : 0;
+      // Find product name
+      let prodNom = '';
+      if(c.dealProductId && grp) {
+        const prod = (grp.recu||[]).find(r=>r.id===c.dealProductId);
+        if(prod) prodNom = [prod.type, prod.sousType, prod.duree].filter(Boolean).join(' · ');
+      }
+      rows.push([
+        grpLabel,
+        c.nom||'',
+        c.budget||0,
+        budJour,
+        c.depense||0,
+        prog+'%',
+        debut,
+        fin,
+        days,
+        prodNom,
+        c.dealProductQty||'',
+        c.statut||''
+      ]);
+    });
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  // Column widths
+  ws['!cols'] = [20,25,14,13,13,14,13,13,8,25,10,12].map(w=>({wch:w}));
+  // Header style (bold)
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for(let C=range.s.c; C<=range.e.c; C++){
+    const cell = ws[XLSX.utils.encode_cell({r:0,c:C})];
+    if(cell) cell.s = {font:{bold:true},fill:{fgColor:{rgb:'5B4EF8'}},font:{bold:true,color:{rgb:'FFFFFF'}}};
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Campagnes');
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, 'Planif-Marketing-Aigles-'+date+'.xlsx');
+  toast('Export téléchargé ✓');
 }
 
 function renderCampagnes() {
