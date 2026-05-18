@@ -1144,7 +1144,7 @@ function buildGroupHtml(g, all) {
       + '<th style="width:75px">Dépensé</th>'
       + '<th style="min-width:70px">Progression</th>'
       + '<th style="width:180px">Période</th>'
-      + (hasProd ? '<th style="width:140px">Produit CRM</th><th style="width:70px">Qté</th>' : '')
+      + (hasProd ? '<th style="width:140px">Produit CRM</th><th style="width:90px">Qté</th>' : '')
       + '<th style="width:100px">Statut</th>'
       + '<th style="width:60px;text-align:center">Envoyé</th>'
       + '<th style="width:40px"></th>'
@@ -1205,7 +1205,7 @@ function buildGroupHtml(g, all) {
                 }).join('')
             + '</select></td>'
           + '<td><input type="number" class="camp-prod-qty" data-id="'+c.id+'" value="'+(c.dealProductQty||'')+'" min="0" placeholder="0"'
-              + ' style="width:55px;border:1px solid var(--b);background:var(--bgp);font-size:11px;font-family:var(--font);padding:2px 5px;border-radius:6px" title="Qté utilisée"></td>'
+              + ' style="width:80px;border:1px solid var(--b);background:var(--bgp);font-size:11px;font-family:var(--font);padding:2px 5px;border-radius:6px" title="Qté utilisée"></td>'
           : '')
         + '<td><span class="camp-statut-btn" data-id="'+c.id+'" data-statut="'+c.statut+'"'
           + ' style="cursor:pointer;font-size:10px;font-weight:600;padding:3px 9px;border-radius:20px;background:'+st.c+'18;color:'+st.c+';border:1px solid '+st.c+'40;white-space:nowrap">'+st.lbl+'</span></td>'
