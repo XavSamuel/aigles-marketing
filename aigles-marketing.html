@@ -926,6 +926,7 @@ function snapshot() {
     budgetGlobal: budgetGlobal,
     publications: JSON.parse(JSON.stringify(publications)),
     pubStatuts: JSON.parse(JSON.stringify(pubStatuts)),
+    messages: JSON.parse(JSON.stringify(messages)),
   };
   undoStack.push(JSON.stringify(state));
   if(undoStack.length > 20) undoStack.shift();
@@ -3629,7 +3630,7 @@ function saveToLS_fallback(state) {
       partenariats, placements, deals, evenements,
       matchs, evenementsBase,
       GROUPS: GROUPS.map(g => { const {filter,...r} = g; return r; }),
-      planifications, budgetGlobal, idCtr, publications, pubStatuts,
+      planifications, budgetGlobal, idCtr, publications, pubStatuts, messages,
     };
     localStorage.setItem('qg_marketing_v1', JSON.stringify(s));
   } catch(e) {}
@@ -4727,6 +4728,7 @@ function snapshot() {
     budgetGlobal: budgetGlobal,
     publications: JSON.parse(JSON.stringify(publications)),
     pubStatuts: JSON.parse(JSON.stringify(pubStatuts)),
+    messages: JSON.parse(JSON.stringify(messages)),
   };
   undoStack.push(JSON.stringify(state));
   if(undoStack.length > 20) undoStack.shift();
