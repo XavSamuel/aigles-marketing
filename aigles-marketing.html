@@ -1382,25 +1382,34 @@ function renderCampagnes() {
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('[data-addgrp-plan]').forEach(btn=>{
     btn.addEventListener('click',e=>{e.stopPropagation();window._addGrpPlanId=btn.getAttribute('data-addgrp-plan');openAddGroup();});
   });
-  // grp-dot color picker
-  const _colorInp = document.getElementById('_grp-color-inp') || (() => {
-    const inp = document.createElement('input');
-    inp.type = 'color'; inp.id = '_grp-color-inp';
-    inp.style.cssText = 'position:fixed;opacity:0;width:0;height:0;pointer-events:none';
-    document.body.appendChild(inp); return inp;
-  })();
+  // grp-dot color picker (même palette que CRM)
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.grp-dot[data-gid]').forEach(dot => {
     dot.addEventListener('click', e => {
       e.stopPropagation();
+      document.querySelectorAll('.crm-color-popup').forEach(p => p.remove());
       const gid = dot.dataset.gid;
       const grp = GROUPS.find(g => g.id === gid); if(!grp) return;
-      _colorInp.value = grp.color || '#5b4ef8';
-      _colorInp.onchange = () => {
-        grp.color = _colorInp.value;
-        if(grp.dealId) { const d = deals.find(x=>x.id===grp.dealId); if(d) d.color = _colorInp.value; }
-        scheduleSave(); renderCampagnes();
-      };
-      _colorInp.click();
+      const colors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c','#3498db','#9b59b6','#e91e8c','#34495e','#16a085','#d35400','#8e44ad','#2980b9','#27ae60','#c0392b','#7f8c8d'];
+      const popup = document.createElement('div');
+      popup.className = 'crm-color-popup';
+      colors.forEach(c => {
+        const sw = document.createElement('div');
+        sw.className = 'crm-color-swatch';
+        sw.style.background = c;
+        if(grp.color === c) sw.style.outline = '2px solid #fff';
+        sw.addEventListener('click', ev => {
+          ev.stopPropagation();
+          grp.color = c;
+          if(grp.dealId) { const d = deals.find(x=>x.id===grp.dealId); if(d) { d.color = c; d.couleur = c; } }
+          scheduleSave(); renderCampagnes();
+          popup.remove();
+        });
+        popup.appendChild(sw);
+      });
+      const rect = dot.getBoundingClientRect();
+      popup.style.cssText = 'position:fixed;top:'+(rect.bottom+6)+'px;left:'+rect.left+'px;z-index:9999';
+      document.body.appendChild(popup);
+      setTimeout(() => document.addEventListener('click', () => popup.remove(), {once:true}), 50);
     });
   });
 
