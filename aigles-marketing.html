@@ -1125,7 +1125,7 @@ function buildGroupHtml(g, all) {
   let hh = '<div class="grp-wrap">'
     + '<div class="grp-hdr" data-gid="'+g.id+'" style="border-radius:'+topR+'">'
       + '<span class="grp-arrow'+(open?' open':'')+'">&#9654;</span>'
-      + '<span class="grp-dot" style="background:'+g.color+'"></span>'
+      + '<span class="grp-dot" data-gid="'+g.id+'" title="Changer la couleur" style="background:'+g.color+';cursor:pointer;outline:2px solid transparent;transition:outline 0.15s" onmouseover="this.style.outline=\'2px solid '+g.color+'\'" onmouseout="this.style.outline=\'2px solid transparent\'"></span>'
       + '<span class="grp-name">'+g.label+'</span>'
       + (linkedDeal
           ? '<span style="font-size:9.5px;background:#e0e7ff;color:#4338ca;border:1px solid #c7d2fe;border-radius:10px;padding:1px 8px;flex-shrink:0;cursor:pointer" class="grp-deal-badge" data-gid="'+g.id+'" title="Changer l\'entente liée">'+(linkedDeal.entreprise||linkedDeal.partenaire||'?')+' ↗</span>'
@@ -1382,6 +1382,28 @@ function renderCampagnes() {
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('[data-addgrp-plan]').forEach(btn=>{
     btn.addEventListener('click',e=>{e.stopPropagation();window._addGrpPlanId=btn.getAttribute('data-addgrp-plan');openAddGroup();});
   });
+  // grp-dot color picker
+  const _colorInp = document.getElementById('_grp-color-inp') || (() => {
+    const inp = document.createElement('input');
+    inp.type = 'color'; inp.id = '_grp-color-inp';
+    inp.style.cssText = 'position:fixed;opacity:0;width:0;height:0;pointer-events:none';
+    document.body.appendChild(inp); return inp;
+  })();
+  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.grp-dot[data-gid]').forEach(dot => {
+    dot.addEventListener('click', e => {
+      e.stopPropagation();
+      const gid = dot.dataset.gid;
+      const grp = GROUPS.find(g => g.id === gid); if(!grp) return;
+      _colorInp.value = grp.color || '#5b4ef8';
+      _colorInp.onchange = () => {
+        grp.color = _colorInp.value;
+        if(grp.dealId) { const d = deals.find(x=>x.id===grp.dealId); if(d) d.color = _colorInp.value; }
+        scheduleSave(); renderCampagnes();
+      };
+      _colorInp.click();
+    });
+  });
+
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.grp-hdr').forEach(hdr=>{
     hdr.addEventListener('click',()=>{const gid=hdr.dataset.gid;collapsedGroups.has(gid)?collapsedGroups.delete(gid):collapsedGroups.add(gid);renderCampagnes();});
   });
@@ -1450,6 +1472,10 @@ function renderCampagnes() {
       sel.focus();
       sel.addEventListener('change', () => {
         g.dealId = sel.value || null;
+        if(g.dealId) {
+          const d = deals.find(x=>x.id===g.dealId);
+          if(d) { if(d.color) g.color = d.color; else d.color = g.color; }
+        }
         scheduleSave(); sel.remove(); renderCampagnes();
       });
       sel.addEventListener('blur', () => setTimeout(() => sel.remove(), 200));
@@ -1859,7 +1885,7 @@ function renderCRM(){
 
     return '<div class="crm-card" data-did="'+d.id+'">'
       + '<div class="crm-card-header" style="flex-wrap:wrap;row-gap:8px">'
-        + '<div class="crm-color-icon" data-did="'+d.id+'" title="Changer la couleur" style="width:34px;height:34px;border-radius:var(--r);background:'+(d.couleur||'var(--acc)')+';color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;">'+(d.entreprise?d.entreprise[0].toUpperCase():'?')+'</div>'
+        + '<div class="crm-color-icon" data-did="'+d.id+'" title="Changer la couleur" style="width:34px;height:34px;border-radius:var(--r);background:'+(d.color||d.couleur||'var(--acc)')+';color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer">'+(d.entreprise?d.entreprise[0].toUpperCase():'?')+'</div>'
         + '<input class="crm-company-name" data-did="'+d.id+'" data-f="entreprise" value="'+(d.entreprise||'')+'" placeholder="Nom de l\'entreprise">'
         + '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">'
           + '<span style="font-size:11px;color:var(--t3);white-space:nowrap">Budget $</span>'
@@ -2030,7 +2056,10 @@ function renderCRM(){
         sw.addEventListener('click', ev => {
           ev.stopPropagation();
           const d = deals.find(x=>x.id===icon.dataset.did); if(!d) return;
-          snapshot(); d.couleur = c;
+          snapshot(); d.couleur = c; d.color = c;
+          // Sync to linked group
+          const linkedGrp = GROUPS.find(g=>g.dealId===d.id);
+          if(linkedGrp) linkedGrp.color = c;
           scheduleSave(); renderCRM();
           popup.remove();
         });
