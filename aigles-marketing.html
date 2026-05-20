@@ -2244,11 +2244,12 @@ function renderCRM(){
         if(error) throw error;
         // Build public URL directly — never undefined
         const publicUrl = 'https://qqxhjchybvscbxxewbkx.supabase.co/storage/v1/object/public/ententes/' + path;
-        snapshot();
         if(!d.fichiers) d.fichiers = [];
         d.fichiers.push({nom:file.name, url:publicUrl, path:path});
+        snapshot();
+        scheduleSave();
         renderCRM();
-        toast('Fichier ajouté');
+        toast('Fichier ajouté ✓');
       } catch(e) {
         toast('Erreur upload: '+e.message);
         renderCRM();
