@@ -2239,11 +2239,9 @@ function renderCRM(){
         const ext = file.name.split('.').pop();
         const path = 'entente-'+d.id+'-'+Date.now()+'.'+ext;
         // Get current session token (avoid SDK CORS issues with direct fetch)
-        const { data: sess } = await sb.auth.getSession();
-        const token = sess?.session?.access_token || SB_KEY;
         const uploadRes = await fetch(SB_URL+'/storage/v1/object/ententes/'+path, {
           method: 'POST',
-          headers: { 'Authorization': 'Bearer '+token, 'apikey': SB_KEY, 'x-upsert': 'true' },
+          headers: { 'Authorization': 'Bearer '+SB_KEY, 'apikey': SB_KEY, 'x-upsert': 'true', 'Content-Type': file.type || 'application/octet-stream' },
           body: file
         });
         if(!uploadRes.ok) { const err = await uploadRes.text(); throw new Error('Upload échoué ('+uploadRes.status+'): '+err); }
