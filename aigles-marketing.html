@@ -1368,7 +1368,7 @@ function openGenericModal(title, bodyHtml) {
 }
 
 function exportCampagnesXLSX(filterGids) {
-  const rows = [['Groupe','Campagne','Budget Total ($)','Budget/Jour ($)','Dépensé ($)','Progression (%)','Date Début','Date Fin','Jours','Produit CRM','Quantité','Statut']];
+  const rows = [['Groupe','Campagne','Budget Total ($)','Budget/Jour ($)','Dépensé ($)','Progression (%)','Date Début','Date Fin','Jours','Produit CRM','Quantité','Statut','Message','Script']];
   const allCamps = [...partenariats,...placements];
   const groupsToExport = GROUPS.filter(g => !filterGids || filterGids.includes(g.id));
 
@@ -1395,6 +1395,7 @@ function exportCampagnesXLSX(filterGids) {
         const prod = (linkedDeal.recu||[]).find(r=>r.id===c.dealProductId);
         if(prod) prodNom = [prod.type, prod.sousType, prod.duree].filter(Boolean).join(' · ');
       }
+      const msg = c.messageId ? messages.find(m=>m.id===c.messageId) : null;
       rows.push([
         g.label||g.id,
         c.nom||'',
@@ -1407,13 +1408,15 @@ function exportCampagnesXLSX(filterGids) {
         days,
         prodNom,
         c.dealProductQty||'',
-        c.statut||''
+        c.statut||'',
+        msg ? (msg.titre||'')+(msg.duree?' ('+msg.duree+')':'')+(msg.langue?' ['+msg.langue+']':'') : '',
+        msg ? (msg.script||'') : ''
       ]);
     });
   });
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [20,25,14,13,13,14,13,13,8,25,10,12].map(w=>({wch:w}));
+  ws['!cols'] = [20,25,14,13,13,14,13,13,8,25,10,12,25,50].map(w=>({wch:w}));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Campagnes');
   const date = new Date().toISOString().slice(0,10);
