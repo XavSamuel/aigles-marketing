@@ -2236,10 +2236,12 @@ function renderCRM(){
       if(label) label.textContent = 'Téléchargement...';
       try {
         const sb = getSB(); if(!sb) throw new Error('Supabase non disponible');
+        // Refresh session before upload to avoid 431 (JWT too large / expired)
+        await sb.auth.refreshSession().catch(()=>{});
         const ext = file.name.split('.').pop();
         const path = 'entente-'+d.id+'-'+Date.now()+'.'+ext;
         const { data, error } = await sb.storage.from('ententes').upload(path, file, {
-          cacheControl: '3600', upsert: false
+          cacheControl: '3600', upsert: true
         });
         if(error) throw error;
         // Build public URL directly — never undefined
@@ -3523,7 +3525,7 @@ function getSB() {
     _sb = window.supabase.createClient(SB_URL, SB_KEY, {
       auth: {
         persistSession: true,
-        autoRefreshToken: false,
+        autoRefreshToken: true,
         detectSessionInUrl: false,
         storage: window.localStorage,
       },
@@ -4492,7 +4494,8 @@ function wirePubModal(p) {
           const sb = getSB(); if(!sb) throw new Error('Supabase non disponible');
           const ext = file.name.split('.').pop();
           const path = 'pub-'+Date.now()+'-'+Math.random().toString(36).slice(2)+'.'+ext;
-          const { data, error } = await sb.storage.from('publications').upload(path, file, {cacheControl:'3600',upsert:false});
+          await sb.auth.refreshSession().catch(()=>{});
+          const { data, error } = await sb.storage.from('publications').upload(path, file, {cacheControl:'3600',upsert:true});
           if(error) throw new Error(error.message);
           const { data: urlData } = sb.storage.from('publications').getPublicUrl(path);
           if(cur) cur.value = urlData.publicUrl;
