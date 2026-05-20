@@ -2236,16 +2236,18 @@ function renderCRM(){
       if(label) label.textContent = 'Téléchargement...';
       try {
         const sb = getSB(); if(!sb) throw new Error('Supabase non disponible');
-        // Refresh session before upload to avoid 431 (JWT too large / expired)
-        await sb.auth.refreshSession().catch(()=>{});
         const ext = file.name.split('.').pop();
         const path = 'entente-'+d.id+'-'+Date.now()+'.'+ext;
-        const { data, error } = await sb.storage.from('ententes').upload(path, file, {
-          cacheControl: '3600', upsert: true
+        // Get current session token (avoid SDK CORS issues with direct fetch)
+        const { data: sess } = await sb.auth.getSession();
+        const token = sess?.session?.access_token || SB_KEY;
+        const uploadRes = await fetch(SB_URL+'/storage/v1/object/ententes/'+path, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer '+token, 'apikey': SB_KEY, 'x-upsert': 'true' },
+          body: file
         });
-        if(error) throw error;
-        // Build public URL directly — never undefined
-        const publicUrl = 'https://qqxhjchybvscbxxewbkx.supabase.co/storage/v1/object/public/ententes/' + path;
+        if(!uploadRes.ok) { const err = await uploadRes.text(); throw new Error('Upload échoué ('+uploadRes.status+'): '+err); }
+        const publicUrl = SB_URL+'/storage/v1/object/public/ententes/'+path;
         if(!d.fichiers) d.fichiers = [];
         d.fichiers.push({nom:file.name, url:publicUrl, path:path});
         snapshot();
