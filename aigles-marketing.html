@@ -1369,29 +1369,27 @@ function openGenericModal(title, bodyHtml) {
 
 function exportCampagnesXLSX(filterGids) {
   const rows = [['Groupe','Campagne','Budget Total ($)','Budget/Jour ($)','Dépensé ($)','Progression (%)','Date Début','Date Fin','Jours','Produit CRM','Quantité','Statut']];
-  const groupMap = {};
-  [...partenariats,...placements].forEach(c=>{
-    const g = c.groupe||'Autres';
-    if(!groupMap[g]) groupMap[g]=[];
-    groupMap[g].push(c);
-  });
-  Object.entries(groupMap).filter(([grpId])=>!filterGids||filterGids.includes(grpId)).forEach(([grpId, camps])=>{
-    const grp = deals.find(d=>d.id===grpId);
-    const grpLabel = grp ? grp.nom : grpId;
-    camps.forEach(c=>{
+  const allCamps = [...partenariats,...placements];
+  const groupsToExport = GROUPS.filter(g => !filterGids || filterGids.includes(g.id));
+
+  groupsToExport.forEach(g => {
+    const items = allCamps.filter(c => c._groupId===g.id || c._gid===g.id || c.gid===g.id);
+    if(!items.length) return;
+    const linkedDeal = g.dealId ? deals.find(d=>d.id===g.dealId) : null;
+
+    items.forEach(c => {
       const debut = c.debut||'';
       const fin = c.fin||'';
       const days = (debut && fin) ? Math.max(1,Math.ceil((new Date(fin)-new Date(debut))/86400000)+1) : '';
       const budJour = (c.budget && days) ? (c.budget/days).toFixed(2) : '';
       const prog = c.budget > 0 ? Math.round((c.depense||0)/c.budget*100) : 0;
-      // Find product name
       let prodNom = '';
-      if(c.dealProductId && grp) {
-        const prod = (grp.recu||[]).find(r=>r.id===c.dealProductId);
+      if(c.dealProductId && linkedDeal) {
+        const prod = (linkedDeal.recu||[]).find(r=>r.id===c.dealProductId);
         if(prod) prodNom = [prod.type, prod.sousType, prod.duree].filter(Boolean).join(' · ');
       }
       rows.push([
-        grpLabel,
+        g.label||g.id,
         c.nom||'',
         c.budget||0,
         budJour,
@@ -1408,14 +1406,7 @@ function exportCampagnesXLSX(filterGids) {
   });
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  // Column widths
   ws['!cols'] = [20,25,14,13,13,14,13,13,8,25,10,12].map(w=>({wch:w}));
-  // Header style (bold)
-  const range = XLSX.utils.decode_range(ws['!ref']);
-  for(let C=range.s.c; C<=range.e.c; C++){
-    const cell = ws[XLSX.utils.encode_cell({r:0,c:C})];
-    if(cell) cell.s = {font:{bold:true},fill:{fgColor:{rgb:'5B4EF8'}},font:{bold:true,color:{rgb:'FFFFFF'}}};
-  }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Campagnes');
   const date = new Date().toISOString().slice(0,10);
