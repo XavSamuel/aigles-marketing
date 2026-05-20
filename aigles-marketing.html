@@ -1373,7 +1373,14 @@ function exportCampagnesXLSX(filterGids) {
   const groupsToExport = GROUPS.filter(g => !filterGids || filterGids.includes(g.id));
 
   groupsToExport.forEach(g => {
-    const items = allCamps.filter(c => c._groupId===g.id || c._gid===g.id || c.gid===g.id);
+    const items = allCamps
+      .filter(c => c._groupId===g.id || c._gid===g.id || c.gid===g.id)
+      .sort((a,b) => {
+        const so = {actif:0,planifie:1,pause:2,termine:3};
+        const sd = (so[a.statut]??1) - (so[b.statut]??1);
+        if(sd !== 0) return sd;
+        return (a.debut||'').localeCompare(b.debut||'');
+      });
     if(!items.length) return;
     const linkedDeal = g.dealId ? deals.find(d=>d.id===g.dealId) : null;
 
