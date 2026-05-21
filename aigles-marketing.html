@@ -1834,6 +1834,7 @@ function renderCRM(){
       const d = deals.find(x=>x.id===inp.dataset.did); if(!d) return;
       const r = (d.recu||[]).find(x=>x.id===inp.dataset.rid); if(!r) return;
       r[inp.dataset.f] = inp.value;
+      scheduleSave();
     };
     inp.addEventListener('change', () => { save(); if(inp.dataset.f==='type'){snapshot();renderCRM();}});
     if(inp.tagName==='INPUT') inp.addEventListener('blur', save);
@@ -1845,6 +1846,7 @@ function renderCRM(){
       const d = deals.find(x=>x.id===inp.dataset.did); if(!d) return;
       const item = (d.donne||[]).find(x=>x.id===inp.dataset.iid); if(!item) return;
       item[inp.dataset.f] = inp.dataset.f==='quantite' ? parseInt(inp.value)||0 : inp.value;
+      scheduleSave();
     };
     inp.addEventListener('change', save);
     inp.addEventListener('blur', save);
