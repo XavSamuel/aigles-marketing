@@ -394,6 +394,7 @@ input[type="date"].pi::-webkit-calendar-picker-indicator{opacity:0.4;cursor:poin
 .crm-action-btn{background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;padding:0 5px;opacity:0;transition:opacity 0.1s}
 .crm-table tr:hover .crm-action-btn{opacity:1}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -487,6 +488,11 @@ input[type="date"].pi::-webkit-calendar-picker-indicator{opacity:0.4;cursor:poin
     Publications
   </div>
 
+  <div class="sb-item" data-view="messages" onclick="navTo('messages')">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 2h10v8H8l-3 2v-2H2z"/></svg>
+    Messages
+  </div>
+
   <div class="sb-section">Relations</div>
   <div class="sb-item" data-view="crm" onclick="navTo('crm')">
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="5" cy="4" r="2.5"/><path d="M1 12c0-2.2 1.8-4 4-4s4 1.8 4 4"/><circle cx="10.5" cy="4" r="2"/><path d="M12 12c0-1.7-1.1-3-2.5-3.4"/></svg>
@@ -509,6 +515,7 @@ input[type="date"].pi::-webkit-calendar-picker-indicator{opacity:0.4;cursor:poin
     <div class="topbar-right" id="topbar-right">
       <button class="btn btn-ghost btn-sm" id="btn-undo" onclick="undo()" disabled>Annuler</button>
       <button class="btn btn-ghost btn-sm" id="btn-redo" onclick="redo()" disabled>Refaire</button>
+      <button class="btn btn-ghost btn-sm" id="btn-export" onclick="ouvrirExportGroupes()" style="display:none">⬇ Exporter</button>
       <button class="btn btn-white btn-sm" onclick="handleNew()">+ Nouveau</button>
     </div>
   </div>
@@ -600,6 +607,7 @@ input[type="date"].pi::-webkit-calendar-picker-indicator{opacity:0.4;cursor:poin
 
     <!-- APPROBATION -->
     <div class="view" id="view-publications"><div id="publications-content"></div></div>
+    <div class="view" id="view-messages"><div id="messages-content"></div></div>
 
     <!-- MATCHS -->
     <div class="view" id="view-matchs"><div id="matchs-list"></div></div>
@@ -773,6 +781,7 @@ let GROUPS = [];
 let planifications = [];
 let collapsedCats = new Set();
 let publications = [];
+let messages = [];
 let _profiles = [];
 let pubStatuts = [
   {id:'attente',  lbl:'En attente',       color:'#d97706'},
@@ -915,6 +924,7 @@ function snapshot() {
     budgetGlobal: budgetGlobal,
     publications: JSON.parse(JSON.stringify(publications)),
     pubStatuts: JSON.parse(JSON.stringify(pubStatuts)),
+    messages: JSON.parse(JSON.stringify(messages)),
   };
   undoStack.push(JSON.stringify(state));
   if(undoStack.length > 20) undoStack.shift();
@@ -995,7 +1005,7 @@ function toast(msg) { const t=$('toast'); t.textContent=msg; t.classList.add('sh
 function rerender() { render(currentView); }
 
 // NAV
-const PAGE_TITLES = {home:'Accueil',budget:'Budget',publications:'Publications',campagnes:'Campagnes',gantt:'Gantt',calendrier:'Calendrier',crm:'CRM Partenaires',matchs:'Matchs'};
+const PAGE_TITLES = {home:'Accueil',budget:'Budget',publications:'Publications',campagnes:'Campagnes',gantt:'Gantt',calendrier:'Calendrier',crm:'CRM Partenaires',matchs:'Matchs',messages:'Banque de messages'};
 function navTo(v) {
   document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
   const el = document.querySelector('.sb-item[data-view="'+v+'"]');
@@ -1004,6 +1014,8 @@ function navTo(v) {
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
   $('view-'+v).classList.add('active');
   $('topbar-title').textContent = PAGE_TITLES[v]||v;
+  const exportBtn = $('btn-export');
+  if(exportBtn) exportBtn.style.display = v === 'campagnes' ? '' : 'none';
   render(v);
 }
 function handleNew() {
@@ -1012,8 +1024,144 @@ function handleNew() {
   if(currentView==='campagnes') { openAddGroup(); return; }
   if(currentView==='crm') { openAddDeal(); return; }
   if(currentView==='matchs') { openAddMatch(); return; }
+  if(currentView==='messages') { addMessage(); return; }
   openAddGroup();
 }
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function addMessage() {
+  snapshot();
+  messages.push({ id:'msg'+(++idCtr), titre:'', script:'', duree:'30s', langue:'FR' });
+  scheduleSave(); renderMessages();
+  setTimeout(() => {
+    const inputs = $('messages-content').querySelectorAll('.msg-field[data-f="titre"]');
+    if(inputs.length) inputs[inputs.length-1].focus();
+  }, 50);
+}
+
+function renderMessages() {
+  const el = $('messages-content'); if(!el) return;
+  const DUREES = ['15s','30s','45s','60s'];
+  const LANGUES = ['FR','EN','FR/EN'];
+  let html = '<div style="max-width:860px;margin:0 auto;padding:20px 0">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
+    + '<div><div style="font-size:18px;font-weight:700;letter-spacing:-0.03em">Banque de messages</div>'
+    + '<div style="font-size:12px;color:var(--t3);margin-top:2px">'+messages.length+' message'+(messages.length!==1?'s':'')+' enregistré'+(messages.length!==1?'s':'')+'</div></div>'
+    + '</div>';
+  if(!messages.length) {
+    html += '<div style="text-align:center;padding:60px 20px;color:var(--t3);font-size:13px;border:1px dashed var(--b);border-radius:var(--rl)">Aucun message — crée ton premier script radio via + Nouveau.</div>';
+  } else {
+    messages.forEach(m => {
+      const linked = [...partenariats,...placements].filter(c=>c.messageId===m.id);
+      html += '<div class="msg-card" data-mid="'+m.id+'" style="background:var(--bgc);border:1px solid var(--b);border-radius:var(--rl);margin-bottom:12px;overflow:hidden">'
+        + '<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--b);background:var(--bgp)">'
+          + '<input class="msg-field" data-mid="'+m.id+'" data-f="titre" value="'+escHtml(m.titre||'')+'" placeholder="Titre du message" style="flex:1;font-size:13px;font-weight:600;border:none;background:transparent;font-family:var(--font);color:var(--t)">'
+          + '<select class="msg-field" data-mid="'+m.id+'" data-f="duree" style="font-size:11px;border:1px solid var(--b);border-radius:6px;padding:3px 7px;background:var(--bgp);color:var(--t);font-family:var(--font)">'
+          + DUREES.map(d=>'<option value="'+d+'"'+(m.duree===d?' selected':'')+'>'+d+'</option>').join('')+'</select>'
+          + '<select class="msg-field" data-mid="'+m.id+'" data-f="langue" style="font-size:11px;border:1px solid var(--b);border-radius:6px;padding:3px 7px;background:var(--bgp);color:var(--t);font-family:var(--font)">'
+          + LANGUES.map(l=>'<option value="'+l+'"'+(m.langue===l?' selected':'')+'>'+l+'</option>').join('')+'</select>'
+          + (linked.length ? '<span style="font-size:10px;background:#e0e7ff;color:#4338ca;border:1px solid #c7d2fe;border-radius:10px;padding:2px 8px;white-space:nowrap">'+linked.length+' campagne'+(linked.length>1?'s':'')+' liée'+(linked.length>1?'s':'')+'</span>' : '')
+          + '<button class="msg-del-btn" data-mid="'+m.id+'" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:16px;padding:2px 6px;opacity:0.4;line-height:1" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4">×</button>'
+        + '</div>'
+        + '<textarea class="msg-field" data-mid="'+m.id+'" data-f="script" placeholder="Texte du script radio..." rows="4" style="width:100%;box-sizing:border-box;padding:12px 16px;border:none;background:var(--bgc);font-size:12px;font-family:var(--font);color:var(--t);resize:vertical;outline:none">'+escHtml(m.script||'')+'</textarea>'
+        + '</div>';
+    });
+  }
+  html += '</div>';
+  el.innerHTML = html;
+  el.querySelectorAll('.msg-field').forEach(inp => {
+    const save = () => {
+      const m = messages.find(x=>x.id===inp.dataset.mid); if(!m) return;
+      m[inp.dataset.f] = inp.value; scheduleSave();
+    };
+    inp.addEventListener('change', save);
+    inp.addEventListener('blur', save);
+  });
+  el.querySelectorAll('.msg-del-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if(!confirm('Supprimer ce message?')) return;
+      const mid = btn.dataset.mid;
+      messages = messages.filter(x=>x.id!==mid);
+      [...partenariats,...placements].forEach(c=>{ if(c.messageId===mid) c.messageId=null; });
+      scheduleSave(); renderMessages();
+    });
+  });
+}
+
+function openGenericModal(title, bodyHtml) {
+  let m = document.getElementById('generic-modal');
+  if(m) m.remove();
+  m = document.createElement('div');
+  m.id = 'generic-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+  m.innerHTML = '<div style="background:var(--bgc);border-radius:14px;padding:24px;max-width:480px;width:100%;max-height:80vh;overflow-y:auto;position:relative">'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:16px">'+title+'</div>'
+    +'<button onclick="document.getElementById(\'generic-modal\').remove()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:18px;cursor:pointer;color:var(--t3)">×</button>'
+    +bodyHtml+'</div>';
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if(e.target===m) m.remove(); });
+}
+
+function ouvrirExportGroupes() {
+  const groups = GROUPS.filter(g => [...partenariats,...placements].some(c=>c._groupId===g.id||c._gid===g.id||c.gid===g.id));
+  if(!groups.length) { toast('Aucun groupe avec des campagnes'); return; }
+  let html = '<div style="font-size:12px;color:var(--t3);margin-bottom:14px">Coche les groupes à inclure dans l\'export Excel.</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">';
+  groups.forEach(g => {
+    const items = [...partenariats,...placements].filter(c=>c._groupId===g.id||c._gid===g.id||c.gid===g.id);
+    html += '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;border:1px solid var(--b);border-radius:8px">'
+      + '<input type="checkbox" class="export-grp-cb" data-gid="'+g.id+'" checked style="width:15px;height:15px;accent-color:#5b4ef8;cursor:pointer">'
+      + '<span style="width:9px;height:9px;border-radius:2px;background:'+(g.color||'var(--acc)')+'"></span>'
+      + '<span style="font-size:13px;font-weight:500;flex:1">'+g.label+'</span>'
+      + '<span style="font-size:11px;color:var(--t3)">'+items.length+' campagne'+(items.length>1?'s':'')+'</span>'
+      + '</label>';
+  });
+  html += '</div><div style="display:flex;gap:8px;justify-content:flex-end">'
+    + '<button class="btn btn-w btn-sm" onclick="document.getElementById(\'generic-modal\').remove()">Annuler</button>'
+    + '<button class="btn btn-sm" onclick="exportGroupesSelectionnes()">⬇ Exporter Excel</button></div>';
+  openGenericModal('Exporter les campagnes', html);
+}
+
+function exportGroupesSelectionnes() {
+  const cbs = document.querySelectorAll('.export-grp-cb:checked');
+  const selectedGids = new Set([...cbs].map(cb=>cb.dataset.gid));
+  if(!selectedGids.size) { toast('Aucun groupe sélectionné'); return; }
+  exportCampagnesXLSX([...selectedGids]);
+  document.getElementById('generic-modal')?.remove();
+}
+
+function exportCampagnesXLSX(filterGids) {
+  const rows = [['Groupe','Campagne','Budget Total ($)','Budget/Jour ($)','Dépensé ($)','Progression (%)','Date Début','Date Fin','Jours','Produit CRM','Quantité','Statut','Message','Script']];
+  const allC = [...partenariats,...placements];
+  const groupsToExport = GROUPS.filter(g => !filterGids || filterGids.includes(g.id));
+  groupsToExport.forEach(g => {
+    const items = allC.filter(c=>c._groupId===g.id||c._gid===g.id||c.gid===g.id)
+      .sort((a,b)=>{ const so={actif:0,planifie:1,pause:2,termine:3}; const sd=(so[a.statut]??1)-(so[b.statut]??1); return sd||((a.debut||'').localeCompare(b.debut||'')); });
+    if(!items.length) return;
+    const linkedDeal = g.dealId ? deals.find(d=>d.id===g.dealId) : null;
+    items.forEach(c => {
+      const debut=c.debut||'', fin=c.fin||'';
+      const days=(debut&&fin)?Math.max(1,Math.ceil((new Date(fin)-new Date(debut))/86400000)+1):'';
+      const budJour=(c.budget&&days)?(c.budget/days).toFixed(2):'';
+      const prog=c.budget>0?Math.round((c.depense||0)/c.budget*100):0;
+      let prodNom='';
+      if(c.dealProductId&&linkedDeal){ const prod=(linkedDeal.recu||[]).find(r=>r.id===c.dealProductId); if(prod) prodNom=[prod.type,prod.sousType,prod.duree].filter(Boolean).join(' · '); }
+      const msg=c.messageId?messages.find(m=>m.id===c.messageId):null;
+      rows.push([g.label||g.id,c.nom||'',c.budget||0,budJour,c.depense||0,prog+'%',debut,fin,days,prodNom,c.dealProductQty||'',c.statut||'',
+        msg?(msg.titre||'')+(msg.duree?' ('+msg.duree+')':'')+(msg.langue?' ['+msg.langue+']':''):'',
+        msg?(msg.script||''):''
+      ]);
+    });
+  });
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[20,25,14,13,13,14,13,13,8,25,10,12,25,50].map(w=>({wch:w}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Campagnes');
+  XLSX.writeFile(wb,'Planif-Marketing-Aigles-'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Export téléchargé ✓');
+}
+
 function render(v) {
   if(v==='home') renderHome();
   else if(v==='budget') renderBudget();
@@ -1024,6 +1172,7 @@ function render(v) {
   else if(v==='calendrier') renderCal();
   else if(v==='crm') renderCRM();
   else if(v==='matchs') renderMatchs();
+  else if(v==='messages') renderMessages();
 }
 document.addEventListener('keydown', e => {
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT') return;
@@ -1301,7 +1450,16 @@ function renderCampagnes() {
     hdr.addEventListener('click',()=>{const gid=hdr.dataset.gid;collapsedGroups.has(gid)?collapsedGroups.delete(gid):collapsedGroups.add(gid);renderCampagnes();});
   });
   ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.edit-btn').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();openEditModal(btn.dataset.id);}));
-  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.dup-btn').forEach(btn=>btn.addEventListener('click',e=>{
+  ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.camp-del-btn').forEach(btn=>btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    const id = btn.dataset.id;
+    if(!confirm('Supprimer cette campagne?')) return;
+    snapshot();
+    partenariats = partenariats.filter(x=>x.id!==id);
+    placements = placements.filter(x=>x.id!==id);
+    scheduleSave(); renderCampagnes(); toast('Campagne supprimée');
+  }));
+    ($('campagnes-content')||{querySelectorAll:()=>[]}).querySelectorAll('.dup-btn').forEach(btn=>btn.addEventListener('click',e=>{
     e.stopPropagation();
     const src = allCamps().find(x=>x.id===btn.dataset.id); if(!src) return;
     snapshot();
@@ -1950,12 +2108,13 @@ function renderCRM(){
         const sb = getSB(); if(!sb) throw new Error('Supabase non disponible');
         const ext = file.name.split('.').pop();
         const path = 'entente-'+d.id+'-'+Date.now()+'.'+ext;
-        const { data, error } = await sb.storage.from('ententes').upload(path, file, {
-          cacheControl: '3600', upsert: false
+        const uploadRes = await fetch(SB_URL+'/storage/v1/object/ententes/'+path, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer '+SB_KEY, 'apikey': SB_KEY, 'x-upsert': 'true', 'Content-Type': file.type || 'application/octet-stream' },
+          body: file
         });
-        if(error) throw error;
-        // Build public URL directly — never undefined
-        const publicUrl = 'https://qqxhjchybvscbxxewbkx.supabase.co/storage/v1/object/public/ententes/' + path;
+        if(!uploadRes.ok) { const err = await uploadRes.text(); throw new Error('Upload échoué ('+uploadRes.status+'): '+err); }
+        const publicUrl = SB_URL+'/storage/v1/object/public/ententes/'+path;
         snapshot();
         if(!d.fichiers) d.fichiers = [];
         d.fichiers.push({nom:file.name, url:publicUrl, path:path});
@@ -3348,7 +3507,7 @@ function buildStateData() {
     partenariats, placements, deals, evenements, matchs,
     evenementsBase, planifications, budgetGlobal,
     GROUPS: GROUPS.map(g => ({ id:g.id, label:g.label, color:g.color, dealId:g.dealId||null, _planId:g._planId||null })),
-    publications, pubStatuts, idCtr
+    publications, pubStatuts, messages, idCtr
   };
 }
 
@@ -3439,6 +3598,7 @@ function applyStateData(d) {
   if(d.GROUPS) GROUPS = d.GROUPS.map(g => ({...g, filter: c => c._groupId === g.id || c._gid === g.id || c.gid === g.id}));
   if(d.publications) publications = d.publications;
   if(d.pubStatuts) pubStatuts = d.pubStatuts;
+  if(d.messages) messages = d.messages;
 }
 
 function scheduleSave() {
@@ -4477,6 +4637,7 @@ function snapshot() {
     budgetGlobal: budgetGlobal,
     publications: JSON.parse(JSON.stringify(publications)),
     pubStatuts: JSON.parse(JSON.stringify(pubStatuts)),
+    messages: JSON.parse(JSON.stringify(messages)),
   };
   undoStack.push(JSON.stringify(state));
   if(undoStack.length > 20) undoStack.shift();
